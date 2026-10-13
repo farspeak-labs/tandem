@@ -133,11 +133,11 @@ export const SuggestMode = Extension.create<SuggestModeOptions>({
             const mod = event.metaKey || event.ctrlKey;
 
             if (isEnter) {
-              // Only a new empty paragraph at the end of a block; typing into it is then tracked
-              // and continues the suggestion that ended the previous line.
+              // Splitting a line changes no words, so it isn't tracked. At the end of a line,
+              // typing into the new one continues the suggestion that ended the previous line.
               const $from = selection.$from;
-              if (selection.empty && $from.parent.isTextblock && $from.parentOffset === $from.parent.content.size) {
-                continueId = ownInsertionBefore($from);
+              if (selection.empty && $from.parent.isTextblock && $from.parent.type.name !== "codeBlock") {
+                continueId = $from.parentOffset === $from.parent.content.size ? ownInsertionBefore($from) : null;
                 const tr = view.state.tr.split(selection.from).setMeta(ALLOW_META, true);
                 view.dispatch(tr.scrollIntoView());
               }
@@ -151,18 +151,29 @@ export const SuggestMode = Extension.create<SuggestModeOptions>({
                 event.preventDefault();
                 return true;
               }
-              // Backspace at the start of a line whose previous line is empty removes that empty line.
-              if (event.key === "Backspace" && $from.parentOffset === 0) {
+              // At a line boundary: joining two lines changes no words, so it isn't tracked.
+              const atStart = event.key === "Backspace" && $from.parentOffset === 0;
+              const atEnd = event.key === "Delete" && $from.parentOffset === $from.parent.content.size;
+              if ((atStart || atEnd) && $from.parent.isTextblock) {
+                event.preventDefault();
+                const container = $from.node($from.depth - 1);
                 const index = $from.index($from.depth - 1);
-                if (index > 0) {
-                  const prev = $from.node($from.depth - 1).child(index - 1);
-                  if (prev.isTextblock && prev.content.size === 0) {
-                    const start = $from.before() - prev.nodeSize;
-                    view.dispatch(view.state.tr.delete(start, $from.before()).setMeta(ALLOW_META, true).scrollIntoView());
-                    event.preventDefault();
-                    return true;
-                  }
+                const neighbourIndex = atStart ? index - 1 : index + 1;
+                const neighbour = neighbourIndex >= 0 && neighbourIndex < container.childCount ? container.child(neighbourIndex) : null;
+                if (neighbour?.isTextblock && neighbour.content.size === 0) {
+                  // An empty neighbouring line is simply removed.
+                  const start = atStart ? $from.before() - neighbour.nodeSize : $from.after();
+                  view.dispatch(view.state.tr.delete(start, start + neighbour.nodeSize).setMeta(ALLOW_META, true).scrollIntoView());
+                } else if (neighbour?.isTextblock && neighbour.type === $from.parent.type) {
+                  const at = atStart ? $from.before() : $from.after();
+                  view.dispatch(view.state.tr.join(at).setMeta(ALLOW_META, true).scrollIntoView());
+                } else {
+                  // Next to a table, list, code block…: move into it instead of doing nothing.
+                  const target = atStart ? $from.before() : $from.after();
+                  const sel = TextSelection.near(view.state.doc.resolve(target), atStart ? -1 : 1);
+                  view.dispatch(view.state.tr.setSelection(sel).scrollIntoView());
                 }
+                return true;
               }
             }
 
