@@ -355,9 +355,13 @@ export async function startService(opts: ServiceOptions = {}): Promise<RunningSe
     async close() {
       docs.closeAll();
       for (const c of sse) c.res.end();
+      for (const ws of wss.clients) ws.terminate();
       wss.close();
-      await new Promise<void>((r) => server.close(() => r()));
+      // Close live connections first: server.close() waits for every open socket,
+      // and app windows keep sync/event connections open (this used to hang quitting).
+      const closed = new Promise<void>((r) => server.close(() => r()));
       server.closeAllConnections?.();
+      await Promise.race([closed, new Promise<void>((r) => setTimeout(r, 2000))]);
       store.close();
       rmSync(stateFile, { force: true });
     },

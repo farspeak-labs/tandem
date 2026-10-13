@@ -50,7 +50,8 @@ app.on("before-quit", async (event) => {
   event.preventDefault();
   const s = service;
   service = null;
-  await s.close().catch(() => undefined);
+  // Never let shutdown block quitting.
+  await Promise.race([s.close().catch(() => undefined), new Promise((r) => setTimeout(r, 3000))]);
   app.quit();
 });
 

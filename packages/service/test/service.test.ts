@@ -237,3 +237,21 @@ describe("agent actions", () => {
     expect(events).toEqual(expect.arrayContaining(["comment.added", "comment.replied", "comment.resolved"]));
   });
 });
+
+describe("shutdown", () => {
+  it("closes promptly while clients are still connected", async () => {
+    const file = join(tmp(), "plan.md");
+    writeFileSync(file, DOC);
+    const s = await startService({ home: tmp(), port: 0, inboxDir: join(tmp(), "inbox") });
+    const { body } = await api(s, "/api/open", { method: "POST", body: JSON.stringify({ path: file, show: false }) });
+    const { provider } = connect(s, body.docId);
+    await until(() => provider.synced);
+    const stream = fetch(`${s.url}/api/events/stream?docId=${body.docId}`, { headers: { Authorization: `Bearer ${s.token}` } });
+    await sleep(100);
+    const started = Date.now();
+    await s.close();
+    expect(Date.now() - started).toBeLessThan(1500);
+    provider.destroy();
+    void stream.catch(() => undefined);
+  });
+});
