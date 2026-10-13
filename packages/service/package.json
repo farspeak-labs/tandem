@@ -1,0 +1,24 @@
+{
+  "name": "@tandem/service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@tandem/core": "workspace:*",
+    "diff": "^9.0.0",
+    "lib0": "^0.2.119",
+    "ws": "^8.22.0",
+    "y-protocols": "^1.0.7",
+    "yaml": "^2.9.1",
+    "yjs": "^13.6.33"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2",
+    "y-websocket": "^3.1.0"
+  },
+  "license": "MIT"
+}

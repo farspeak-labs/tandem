@@ -1,0 +1,28 @@
+appId: com.farspeaklabs.tandem
+productName: Tandem
+copyright: "Copyright © 2026 Farspeak Labs LLC · MIT License · Based on Roughdraft by Nathan Baschez (MIT)"
+directories:
+  output: out
+files:
+  - dist/**
+  - package.json
+asar: true
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dir
+  # Unsigned by default. build/package.sh signs when TANDEM_SIGN_IDENTITY is set
+  # (e.g. in the untracked build/signing.env) and notarizes when a notarytool profile exists.
+  identity: null
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
+  extendInfo:
+    LSMultipleInstancesProhibited: true
+fileAssociations:
+  - ext: md
+    name: Markdown document
+    role: Editor
+    rank: Alternate

@@ -1,0 +1,29 @@
+{
+  "name": "tandem",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -b",
+    "build": "pnpm -r build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.5",
+    "ws": "^8.22.0"
+  },
+  "license": "MIT",
+  "description": "Write and review Markdown plans with your agents — a local Mac app with a CLI for agents",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/farspeak-labs/tandem.git"
+  },
+  "author": "Farspeak Labs"
+}

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+out/
+*.tsbuildinfo
+.DS_Store
+packages/core/test/corpus-local/
+long-wait.log

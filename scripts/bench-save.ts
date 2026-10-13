@@ -1,0 +1,11 @@
+import { readFileSync } from "node:fs";
+import * as Y from "yjs";
+import { TandemDocument } from "../packages/core/src/index";
+const md = readFileSync(process.argv[2], "utf8");
+const doc = TandemDocument.fromMarkdown(md);
+const t = (label: string, fn: () => void, n = 20) => { fn(); const s = performance.now(); for (let i = 0; i < n; i++) fn(); console.log(label, ((performance.now() - s) / n).toFixed(1), "ms"); };
+t("toJSON", () => doc.toJSON());
+t("toMarkdown", () => doc.toMarkdown());
+const para = doc.fragment.get(2) as Y.XmlElement;
+t("edit+toMarkdown", () => { (para.get(0) as Y.XmlText).insert(0, "x"); doc.toMarkdown(); });
+console.log("blocks", doc.fragment.length, "bytes", md.length);
