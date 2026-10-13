@@ -10,7 +10,8 @@
     "typecheck:renderer": "tsc -p tsconfig.renderer.json --noEmit",
     "build:main": "node build-main.mjs",
     "start": "pnpm build:main && electron .",
-    "package": "pnpm build:main && pnpm build:renderer && ./build/package.sh"
+    "package": "pnpm build:main && pnpm build:renderer && ./build/package.sh",
+    "package:dmg": "pnpm build:main && pnpm build:renderer && TANDEM_TARGET=dmg ./build/package.sh"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.8.1",
