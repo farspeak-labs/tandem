@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { userInfo } from "node:os";
 import { join } from "node:path";
 import { BrowserWindow, Menu, Notification, app, dialog, nativeTheme, session, shell, type MenuItemConstructorOptions } from "electron";
@@ -13,10 +13,21 @@ import { startService, type RunningService } from "@tandem/service";
  */
 
 let service: RunningService | null = null;
+
+/** Lifecycle log (~/Library/Application Support/Tandem/main.log) for diagnosing start-up and quit. */
+function log(message: string) {
+  try {
+    appendFileSync(join(app.getPath("userData"), "main.log"), `${new Date().toISOString()} ${message}\n`);
+  } catch {
+    // logging must never break the app
+  }
+}
 const windows = new Map<string, BrowserWindow>();
 const waiting = new Map<string, number>();
 const pendingOpen: string[] = [];
 let libraryWindow: BrowserWindow | null = null;
+/** Set once a quit starts, so a quit interrupted by a window closing late still finishes. */
+let quitting = false;
 
 // Test and bench runs use their own profile so they can run beside the installed app.
 if (process.env.TANDEM_USER_DATA) app.setPath("userData", process.env.TANDEM_USER_DATA);
@@ -38,22 +49,48 @@ app.on("open-file", (event, path) => {
 });
 
 app.on("window-all-closed", () => {
+  log("window-all-closed");
+  // Electron reports this instead of quitting when a window finished closing late during a quit.
+  if (quitting) {
+    app.quit();
+    return;
+  }
   // Stay alive: the doc service must keep answering agents. Quit from the menu.
 });
 
 app.on("activate", () => {
+  log("activate");
   if (windows.size === 0 && !libraryWindow) showLibrary();
 });
 
 app.on("before-quit", async (event) => {
+  log(`before-quit (service ${service ? "running" : "stopped"})`);
+  if (!quitting) {
+    quitting = true;
+    // Last resort: never leave a half-quit app behind.
+    setTimeout(() => {
+      log("quit timed out; exiting");
+      app.exit(0);
+    }, 6000).unref();
+  }
   if (!service) return;
   event.preventDefault();
   const s = service;
   service = null;
   // Never let shutdown block quitting.
-  await Promise.race([s.close().catch(() => undefined), new Promise((r) => setTimeout(r, 3000))]);
+  await Promise.race([
+    s.close().then(
+      () => log("service closed"),
+      (err) => log(`service close failed: ${err instanceof Error ? err.message : String(err)}`),
+    ),
+    new Promise((r) => setTimeout(r, 3000)),
+  ]);
+  log("quitting");
   app.quit();
 });
+
+app.on("will-quit", () => log("will-quit"));
+app.on("quit", () => log("quit"));
 
 /** Small persisted preferences in the app's userData folder. */
 interface Prefs {
@@ -86,7 +123,9 @@ app.whenReady().then(async () => {
     for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.setBackgroundColor(windowBackground());
   });
   session.defaultSession.setSpellCheckerEnabled(prefs.spellcheck);
+  log("starting");
   service = await startService({ onShow: (docId, path) => showDoc(docId, path) });
+  log(`service up on ${service.url}`);
   service.docs.on((e) => {
     if (e.type === "agent.waiting") onAgentWaiting(e.docId, e.count);
     if (e.type === "doc.saved") windows.get(e.docId)?.setDocumentEdited(false);
@@ -140,7 +179,9 @@ function showLibrary() {
     },
   });
   libraryWindow = win;
+  win.on("close", () => log("library close"));
   win.on("closed", () => {
+    log("library closed");
     libraryWindow = null;
   });
   win.once("ready-to-show", () => win.show());
@@ -191,6 +232,7 @@ function showDoc(docId: string, path: string) {
   });
   win.setRepresentedFilename(path);
   windows.set(docId, win);
+  win.on("close", () => log(`window close ${docId}`));
   win.on("closed", () => windows.delete(docId));
   win.once("ready-to-show", () => win.show());
   win.webContents.setWindowOpenHandler(({ url }) => {
