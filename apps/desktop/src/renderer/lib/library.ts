@@ -1,3 +1,4 @@
+import { tildePath } from "./connection";
 /** Library (M4): shared types and pure helpers for the Library view. */
 
 export type DocStatusValue = "draft" | "awaiting-review" | "changes-requested" | "approved";
@@ -369,7 +370,7 @@ export function displayPath(path: string, project: string | null): string {
     const i = path.lastIndexOf(marker);
     if (i >= 0) return path.slice(i + marker.length);
   }
-  return path.replace(/^\/Users\/[^/]+/, "~");
+  return tildePath(path);
 }
 
 export function formatCount(n: number): string {

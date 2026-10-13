@@ -13,7 +13,7 @@ for (const f of readdirSync(dir).filter((x) => x.endsWith(".md"))) {
     const node = p.doc.content![i];
     blocks++;
     if (node.type === "rawBlock") { raw++; rawTypes[b.type] = (rawTypes[b.type] ?? 0) + 1; return; }
-    const ctx = { comments: p.comments, suggestions: p.suggestions, inlineCommentIds: new Set<string>() };
+    const ctx = { comments: p.comments, suggestions: p.suggestions, inlineCommentIds: new Set<string>(), inlineSuggestionIds: new Set<string>() };
     const text = serializeBlock(node, ctx) + "\n\n";
     const again = convertBlock(text, newConverter(p.segments.endmatter));
     if (signature(again) !== signature(node)) { semanticFail++; if (fails.length < 12) fails.push(`${f}\n  IN : ${JSON.stringify(b.raw.slice(0, 160))}\n  OUT: ${JSON.stringify(text.slice(0, 160))}`); }

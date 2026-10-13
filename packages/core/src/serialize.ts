@@ -9,8 +9,8 @@ export interface SerializeContext {
   style?: { italic: "*" | "_"; bullet: "-" | "*" | "+"; inTable?: boolean };
   /** Parses a table's original source into per-row keys and lines (supplied by the document layer). */
   originalRows?: (src: string) => { lines: string[]; rows: string[]; width: number } | null;
-  /** Filled while serializing: suggestion ids that still have marked text. */
-  inlineSuggestionIds?: Set<string>;
+  /** Filled while serializing: suggestion ids that still have marked text. Shared, never copied. */
+  inlineSuggestionIds: Set<string>;
   /** Filled while serializing: comment ids whose body was written inline. */
   inlineCommentIds: Set<string>;
 }
@@ -76,7 +76,7 @@ function collectInlineIds(node: JSONNode, ctx: SerializeContext) {
   if (node.type === "commentPoint" && typeof node.attrs?.id === "string") ctx.inlineCommentIds.add(node.attrs.id);
   for (const m of node.marks ?? []) {
     if (m.type === "comment" && typeof m.attrs?.id === "string") ctx.inlineCommentIds.add(m.attrs.id);
-    if (SUGGESTION_MARKS.has(m.type) && typeof m.attrs?.id === "string") (ctx.inlineSuggestionIds ??= new Set()).add(m.attrs.id);
+    if (SUGGESTION_MARKS.has(m.type) && typeof m.attrs?.id === "string") ctx.inlineSuggestionIds.add(m.attrs.id);
   }
   for (const c of node.content ?? []) collectInlineIds(c, ctx);
 }
@@ -300,7 +300,7 @@ export function inline(nodes: JSONNode[] | undefined, ctx: SerializeContext, blo
     // Marks already open stay outermost (in stack order) so a link inside
     // italics doesn't force the italics closed and reopened.
     for (const m of node.marks ?? []) {
-      if (SUGGESTION_MARKS.has(m.type) && typeof m.attrs?.id === "string") (ctx.inlineSuggestionIds ??= new Set()).add(m.attrs.id);
+      if (SUGGESTION_MARKS.has(m.type) && typeof m.attrs?.id === "string") ctx.inlineSuggestionIds.add(m.attrs.id);
     }
     const marks = [...(node.marks ?? [])].sort((a, b) => {
       const sa = stack.findIndex((m) => markKey(m) === markKey(a));
@@ -393,7 +393,7 @@ export function serializeEndmatter(ctx: SerializeContext): string {
   const comments = section(ctx.comments, true);
   // Suggestions whose text is gone (resolved, undone) are dropped; replies to them keep their own entries.
   const live = ctx.inlineSuggestionIds;
-  const suggestions = section(live ? Object.fromEntries(Object.entries(ctx.suggestions).filter(([id]) => live.has(id))) : {}, false);
+  const suggestions = section(Object.fromEntries(Object.entries(ctx.suggestions).filter(([id]) => live.has(id))), false);
   const data: Record<string, unknown> = {};
   if (Object.keys(comments).length) data.comments = comments;
   if (Object.keys(suggestions).length) data.suggestions = suggestions;

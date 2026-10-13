@@ -19,7 +19,7 @@ function stateOf(md: string): EditorState {
 }
 
 function md(doc: PMNode): string {
-  const ctx = { comments: {}, suggestions: {}, inlineCommentIds: new Set<string>() };
+  const ctx = { comments: {}, suggestions: {}, inlineCommentIds: new Set<string>(), inlineSuggestionIds: new Set<string>() };
   return (doc.toJSON().content ?? []).map((b: never) => serializeBlock(b, ctx)).join("\n\n");
 }
 

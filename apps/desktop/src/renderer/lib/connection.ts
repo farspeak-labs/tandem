@@ -55,3 +55,10 @@ export function reviewerName(): string {
   const fromQuery = new URLSearchParams(window.location.search).get("user");
   return (fromPreload || fromQuery || "You").trim() || "You";
 }
+
+/** Shortens the user's real home folder to "~" (paths elsewhere, e.g. /Users/Storage, stay as they are). */
+export function tildePath(path: string): string {
+  const home = typeof window === "undefined" ? undefined : (window as unknown as { tandem?: { home?: string } }).tandem?.home;
+  if (home && (path === home || path.startsWith(`${home}/`))) return `~${path.slice(home.length)}`;
+  return path;
+}

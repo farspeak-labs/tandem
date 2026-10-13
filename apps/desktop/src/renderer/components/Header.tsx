@@ -1,3 +1,4 @@
+import { tildePath } from "../lib/connection";
 import { useState } from "react";
 import type { TandemApi } from "../lib/api";
 import type { UserInfo } from "../lib/session";
@@ -52,7 +53,7 @@ function SaveIndicator({ status }: { status: DocStatus }) {
 }
 
 function shortPath(path: string) {
-  return path.replace(/^\/Users\/[^/]+/, "~");
+  return tildePath(path);
 }
 
 export function Header(p: Props) {

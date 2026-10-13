@@ -67,6 +67,7 @@ export class TandemDocument {
       comments: this.comments.toJSON() as ReviewMap,
       suggestions: this.suggestions.toJSON() as ReviewMap,
       inlineCommentIds: new Set(),
+      inlineSuggestionIds: new Set(),
       originalRows: originalTableRows,
     };
   }

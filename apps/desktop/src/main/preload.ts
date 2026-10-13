@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld("tandem", {
   docId: config.docId,
   view: config.view,
   userName: config.userName,
+  home: config.home,
   platform: process.platform,
 });
 

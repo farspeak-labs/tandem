@@ -171,7 +171,8 @@ describe("bulk edits", () => {
 describe("display + selection", () => {
   it("displayPath is relative to the project when it can be", () => {
     expect(displayPath("/Users/ryan/code/tandem/docs/plans/a.md", "tandem")).toBe("docs/plans/a.md");
-    expect(displayPath("/Users/ryan/notes/a.md", null)).toBe("~/notes/a.md");
+    // Only the real home folder (from the app) becomes "~"; without it, paths stay as they are.
+    expect(displayPath("/Users/ryan/notes/a.md", null)).toBe("/Users/ryan/notes/a.md");
   });
 
   it("clickSelection handles plain, cmd and shift clicks", () => {

@@ -141,7 +141,7 @@ describe("serializer fidelity", () => {
       const p = parseDocument(readFileSync(join(corpusDir, file), "utf8"));
       for (const node of p.doc.content ?? []) {
         if (node.type === "rawBlock") continue;
-        const ctx = { comments: p.comments, suggestions: p.suggestions, inlineCommentIds: new Set<string>() };
+        const ctx = { comments: p.comments, suggestions: p.suggestions, inlineCommentIds: new Set<string>(), inlineSuggestionIds: new Set<string>() };
         const again = convertBlock(`${serializeBlock(node, ctx)}\n\n`, newConverter(p.segments.endmatter));
         if (signature(again) !== signature(node)) failures.push(`${file}: ${String(node.attrs?.src).slice(0, 80)}`);
       }
@@ -221,5 +221,20 @@ describe("review marks on inline code", () => {
     const out = doc.toMarkdown();
     expect(out).toContain("  s1:");
     expect(out).not.toContain("  s2:");
+  });
+});
+
+describe("suggestion metadata survives edits (regression: lost endmatter)", () => {
+  it("keeps the endmatter entry of a suggestion typed into a paragraph that was then re-serialized", () => {
+    const doc = TandemDocument.fromMarkdown("# Plan\n\nFirst para.\n");
+    const para = doc.fragment.get(1) as Y.XmlElement;
+    const text = para.get(0) as Y.XmlText;
+    doc.ydoc.transact(() => {
+      text.insert(text.length, " added", { insertion: { id: "s1" } });
+      doc.suggestions.set("s1", { by: "Alex", at: "2026-10-13T10:00:00.000Z" });
+    });
+    const out = doc.toMarkdown();
+    expect(out).toContain("First para.{++ added++}{#s1}");
+    expect(out).toContain("suggestions:\n  s1:\n    by: Alex");
   });
 });

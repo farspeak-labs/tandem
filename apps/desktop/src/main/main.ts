@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
-import { userInfo } from "node:os";
+import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 import { BrowserWindow, Menu, Notification, app, dialog, nativeTheme, session, shell, type MenuItemConstructorOptions } from "electron";
 import { cleanCopy } from "@tandem/core";
@@ -175,7 +175,7 @@ function showLibrary() {
       preload: join(__dirname, "preload.cjs"),
       contextIsolation: true,
       sandbox: true,
-      additionalArguments: [`--tandem=${JSON.stringify({ baseUrl: service.url, token: service.token, view: "library", userName: userName() })}`],
+      additionalArguments: [`--tandem=${JSON.stringify({ baseUrl: service.url, token: service.token, view: "library", userName: userName(), home: homedir() })}`],
     },
   });
   libraryWindow = win;
@@ -204,6 +204,7 @@ function showDoc(docId: string, path: string) {
   if (!service) return;
   app.addRecentDocument(path);
   const existing = windows.get(docId);
+  log(`show doc ${docId} (${existing && !existing.isDestroyed() ? "reusing window" : "new window"}) ${path}`);
   if (existing && !existing.isDestroyed()) {
     if (existing.isMinimized()) existing.restore();
     existing.show();
@@ -227,7 +228,7 @@ function showDoc(docId: string, path: string) {
       sandbox: true,
       spellcheck: process.env.TANDEM_SPELLCHECK ? process.env.TANDEM_SPELLCHECK === "1" : true,
       backgroundThrottling: process.env.TANDEM_BENCH !== "1",
-      additionalArguments: [`--tandem=${JSON.stringify({ baseUrl: service.url, token: service.token, docId, userName: userName() })}`],
+      additionalArguments: [`--tandem=${JSON.stringify({ baseUrl: service.url, token: service.token, docId, userName: userName(), home: homedir() })}`],
     },
   });
   win.setRepresentedFilename(path);
