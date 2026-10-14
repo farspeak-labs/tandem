@@ -7,6 +7,7 @@
 
   --bg: #ffffff;
   --bg-chrome: rgba(250, 250, 250, 0.86);
+  --bg-chrome-solid: #fafafa;
   --bg-sunken: #f5f5f7;
   --bg-raised: #ffffff;
   --border: rgba(0, 0, 0, 0.1);
@@ -63,6 +64,7 @@
   :root {
     --bg: #1c1c1e;
     --bg-chrome: rgba(36, 36, 38, 0.86);
+    --bg-chrome-solid: #242426;
     --bg-sunken: #232325;
     --bg-raised: #2c2c2e;
     --border: rgba(255, 255, 255, 0.1);
@@ -185,11 +187,22 @@ button {
   display: none;
 }
 
+/* No comments or others' suggestions: the document is centred on its own. */
+.page.no-rail {
+  grid-template-columns: minmax(0, var(--measure));
+}
+.page.no-rail > .rail {
+  display: none;
+}
+
 @media (max-width: 1080px) {
   .page {
     grid-template-columns: minmax(0, 1fr) 260px;
     gap: 24px;
     padding-inline: 24px;
+  }
+  .page.no-rail {
+    grid-template-columns: minmax(0, var(--measure));
   }
 }
 
@@ -221,8 +234,9 @@ button {
   gap: 16px;
   min-height: 52px;
   padding: 8px 16px 8px 84px; /* room for traffic lights under hiddenInset */
-  background: var(--bg-chrome);
-  backdrop-filter: saturate(180%) blur(20px);
+  /* Solid, not a blur: nothing scrolls beneath the title bar, and a backdrop
+     filter here repainted on every scroll frame (visible flicker). */
+  background: var(--bg-chrome-solid, var(--bg));
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
   position: relative;

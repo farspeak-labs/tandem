@@ -97,6 +97,8 @@ export function Workspace({ session, api }: { session: Session; api: TandemApi }
     () => buildThreads(comments, new Set([...suggestions.map((s) => s.id), ...Object.keys(session.suggestions.toJSON())])),
     [comments, suggestions, session],
   );
+  // The comment column only takes space when it has something to show.
+  const railNeeded = threads.size > 0 || railSuggestions.length > 0 || hasDraft || docDraft;
 
   // Caret inside a highlight → focus its card.
   useEffect(() => {
@@ -281,7 +283,11 @@ export function Workspace({ session, api }: { session: Session; api: TandemApi }
           <Outline editor={editor} scroller={scrollerRef} overlay={narrow} onClose={() => (narrow ? setOutlineOverlay(false) : setOutlinePref(false))} />
         )}
         <main className="scroller" ref={scrollerRef}>
-          <div className={`page ${view === "source" && !historyOpen ? "is-hidden" : ""} ${historyOpen ? "is-history" : ""}`}>
+          <div
+            className={`page ${view === "source" && !historyOpen ? "is-hidden" : ""} ${historyOpen ? "is-history" : ""} ${
+              historyOpen || railNeeded ? "" : "no-rail"
+            }`}
+          >
             <article className="doc" hidden={historyOpen}>
               {editor && <EditorContent editor={editor} />}
               {editor && <FormatBubble editor={editor} session={session} mode={mode} onComment={newComment} />}
