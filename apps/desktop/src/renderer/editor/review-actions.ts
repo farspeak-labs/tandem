@@ -2,7 +2,7 @@ import type { Editor } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 import { docReviewIds, nextId } from "../lib/ids";
 import type { Session } from "../lib/session";
-import { ME } from "../lib/session";
+import { ME, localTransact } from "../lib/session";
 import { draftCommentKey, getDraftRange } from "./draft-comment";
 import { resolveSuggestion, suggestionIds } from "./suggest";
 import { ALLOW_META } from "./suggest-mode";
@@ -40,7 +40,7 @@ export function submitComment(editor: Editor, session: Session, body: string, an
   const id = allocateCommentId(editor, session);
   const range = anchored ? getDraftRange(editor.state) : null;
   if (anchored && !range) return null;
-  session.ydoc.transact(() => {
+  localTransact(session, () => {
     session.comments.set(id, { body, by: ME.name, at: now() });
     if (range) {
       const tr = editor.state.tr
@@ -89,7 +89,7 @@ function stripCommentAnchors(editor: Editor, id: string) {
 
 /** Deletes a comment; deleting a thread root also removes its anchor and replies. */
 export function deleteComment(editor: Editor, session: Session, id: string) {
-  session.ydoc.transact(() => {
+  localTransact(session, () => {
     const isRoot = !session.comments.get(id)?.re;
     if (isRoot) {
       stripCommentAnchors(editor, id);
@@ -103,7 +103,7 @@ export function deleteComment(editor: Editor, session: Session, id: string) {
 export function resolve(editor: Editor, session: Session, id: string, accept: boolean) {
   const lead = (session.suggestions.get(id)?.group as string | undefined) ?? id;
   const members = [lead, ...[...session.suggestions.entries()].filter(([, e]) => e.group === lead).map(([k]) => k)];
-  session.ydoc.transact(() => {
+  localTransact(session, () => {
     const tr = editor.state.tr;
     let changed = false;
     for (const m of new Set([id, ...members])) changed = resolveSuggestion(tr, m, accept) || changed;
@@ -120,7 +120,7 @@ export function linkSuggestion(session: Session, id: string, to: string) {
 }
 
 export function resolveAll(editor: Editor, session: Session, accept: boolean) {
-  session.ydoc.transact(() => {
+  localTransact(session, () => {
     const tr = editor.state.tr;
     const ids = suggestionIds(tr.doc);
     for (const id of ids) resolveSuggestion(tr, id, accept);
@@ -137,7 +137,7 @@ function forgetSuggestion(session: Session, id: string) {
 /** Drops map entries for our own suggestions whose text no longer exists in the doc. */
 export function pruneOrphans(editor: Editor, session: Session, ids: string[]) {
   const live = docReviewIds(editor.state.doc).suggestions;
-  session.ydoc.transact(() => {
+  localTransact(session, () => {
     for (const id of ids) {
       if (!live.has(id) && session.suggestions.get(id)?.by === ME.name) forgetSuggestion(session, id);
     }

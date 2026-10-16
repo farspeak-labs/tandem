@@ -14,6 +14,8 @@ export interface DocInfo {
   saveState: SaveState;
   lastSavedAt: string | null;
   agentWaiting: number;
+  /** Review status: draft · awaiting-review · changes-requested · approved. */
+  status?: string;
   /** How agent edits land in this doc: tracked suggestions (default) or direct. */
   agentEdits?: "suggest" | "direct";
 }

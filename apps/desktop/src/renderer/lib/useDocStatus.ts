@@ -10,6 +10,8 @@ export interface DocStatus {
   lastReview: ReviewEvent | null;
   /** Bumps whenever the service records a history round. */
   roundTick: number;
+  /** The plan's review status, kept current as reviews finish and agents hand over revisions. */
+  planStatus: string | null;
   synced: boolean;
   connected: boolean;
   save(): Promise<void>;
@@ -25,6 +27,7 @@ export function useDocStatus(api: TandemApi, session: Session): DocStatus {
   const [agentWaiting, setAgentWaiting] = useState(0);
   const [lastReview, setLastReview] = useState<ReviewEvent | null>(null);
   const [roundTick, setRoundTick] = useState(0);
+  const [planStatus, setPlanStatus] = useState<string | null>(null);
   const [synced, setSynced] = useState(session.provider.synced);
   const [connected, setConnected] = useState(session.provider.wsconnected);
   const fallback = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -41,6 +44,7 @@ export function useDocStatus(api: TandemApi, session: Session): DocStatus {
           setSaveState(i.saveState);
           setLastSavedAt(i.lastSavedAt);
           setAgentWaiting(i.agentWaiting);
+          if (i.status) setPlanStatus(i.status);
         })
         .catch(() => {});
     void refresh();
@@ -57,8 +61,10 @@ export function useDocStatus(api: TandemApi, session: Session): DocStatus {
         setAgentWaiting(num(d.count) ?? num(d.agentWaiting) ?? num(data) ?? 0);
       } else if (type === "round.created") {
         setRoundTick((n) => n + 1);
+        if (d.kind === "agent") setPlanStatus("awaiting-review");
       } else if (type === "review.completed") {
         setLastReview(d as unknown as ReviewEvent);
+        setPlanStatus(d.outcome === "approve" ? "approved" : "changes-requested");
       }
     });
 
@@ -107,5 +113,5 @@ export function useDocStatus(api: TandemApi, session: Session): DocStatus {
     }
   };
 
-  return { info, saveState, lastSavedAt, agentWaiting, lastReview, roundTick, synced, connected, save };
+  return { info, saveState, lastSavedAt, agentWaiting, lastReview, roundTick, planStatus, synced, connected, save };
 }

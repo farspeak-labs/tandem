@@ -1,3 +1,4 @@
+import { ySyncPluginKey } from "@tiptap/y-tiptap";
 import { reviewerName } from "./connection";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
@@ -38,4 +39,14 @@ export function createSession(conn: Connection): Session {
       ydoc.destroy();
     },
   };
+}
+
+/**
+ * Runs `fn` as one change made by this editor. The collaborative undo only
+ * tracks changes tagged with the editor's sync key, so every local edit that
+ * wraps several steps (suggestions, accept/reject, comments) must go through here
+ * — an untagged outer transaction makes the whole edit invisible to ⌘Z.
+ */
+export function localTransact(session: Session, fn: () => void) {
+  session.ydoc.transact(fn, ySyncPluginKey);
 }

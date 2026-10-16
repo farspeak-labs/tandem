@@ -1,4 +1,12 @@
 import { tildePath } from "../lib/connection";
+import { StatusBadge } from "./library/DocRow";
+
+const STATUS_HINTS: Record<string, string> = {
+  draft: "Not handed over for review",
+  "awaiting-review": "An agent handed this plan to you for review",
+  "changes-requested": "You requested changes — waiting for the agent's revision",
+  approved: "You approved this plan",
+};
 import { useState } from "react";
 import type { TandemApi } from "../lib/api";
 import type { UserInfo } from "../lib/session";
@@ -87,6 +95,11 @@ export function Header(p: Props) {
 
       <div className="titlebar__status">
         <SaveIndicator status={p.status} />
+        {p.status.planStatus && (
+          <span title={STATUS_HINTS[p.status.planStatus] ?? ""}>
+            <StatusBadge status={p.status.planStatus} />
+          </span>
+        )}
         {p.status.agentWaiting > 0 && (
           <span className="badge badge--agent" title="An agent is waiting for your review">
             <span className="pulse" />

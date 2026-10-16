@@ -262,6 +262,7 @@ export async function startService(opts: ServiceOptions = {}): Promise<RunningSe
           lastSavedAt: open.lastSavedAt,
           lastError: open.lastError,
           agentWaiting: open.agentWaiting,
+          status: docs.store.getDoc(open.docId)?.status ?? "draft",
           agentEdits: docs.store.getDoc(open.docId)?.agentEdits ?? "suggest",
           presence: open.room.presence(),
         });
