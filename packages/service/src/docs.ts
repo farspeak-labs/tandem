@@ -231,6 +231,7 @@ export class OpenDoc {
       if (md !== this.disk) {
         atomicWrite(this.path, md);
         this.disk = md;
+        this.doc.markWritten(md);
         this.lastSavedAt = new Date().toISOString();
         this.emit({ type: "doc.saved", docId: this.docId, at: this.lastSavedAt });
       }

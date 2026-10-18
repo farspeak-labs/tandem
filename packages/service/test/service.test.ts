@@ -255,3 +255,33 @@ describe("shutdown", () => {
     void stream.catch(() => undefined);
   });
 });
+
+describe("git reset while a plan is open", () => {
+  it("restoring an older file version never duplicates sections, even after in-app edits", async () => {
+    const file = join(tmp(), "plan.md");
+    const v1 = "# Plan\n\n## A\n\nAlpha.\n\n## B\n\nBeta.\n";
+    writeFileSync(file, v1);
+    const s = await start();
+    const { body } = await api(s, "/api/open", { method: "POST", body: JSON.stringify({ path: file, show: false }) });
+    const { ydoc, provider } = connect(s, body.docId);
+    await until(() => provider.synced);
+    // Reviewer edits "Alpha." in the app; it saves.
+    ((ydoc.getXmlFragment("prosemirror").get(2) as Y.XmlElement).get(0) as Y.XmlText).insert(0, "Edited: ");
+    await until(() => readFileSync(file, "utf8").includes("Edited: Alpha."));
+    for (let i = 0; i < 3; i++) {
+      // `git checkout -- plan.md` / `git stash`: the old version comes back on disk.
+      await sleep(150);
+      writeFileSync(file, v1);
+      await until(() => s.docs.get(body.docId)!.markdown() === v1);
+      await sleep(500);
+      expect(readFileSync(file, "utf8")).toBe(v1);
+      // …and the agent's edit comes back (stash pop), then is reset again.
+      writeFileSync(file, v1.replace("Beta.", "Beta, revised."));
+      await until(() => s.docs.get(body.docId)!.markdown().includes("Beta, revised."));
+    }
+    const final = readFileSync(file, "utf8");
+    expect((final.match(/^## A$/gm) ?? []).length).toBe(1);
+    expect((final.match(/Alpha\./g) ?? []).length).toBe(1);
+    provider.destroy();
+  });
+});

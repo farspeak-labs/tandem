@@ -88,6 +88,31 @@ export class TandemDocument {
   }
 
   /**
+   * Call right after `markdown` (from `toMarkdown()`) was written to disk.
+   * Each block's preserved source becomes exactly what was written, so the
+   * next three-way merge against the disk version can match every block —
+   * including blocks edited in the app. Without this, an outside write
+   * (git reset/stash, an agent's edit) re-inserted edited blocks next to
+   * their old copies, and each save made the duplication worse.
+   */
+  markWritten(markdown: string) {
+    const blocks = segment(markdown).blocks;
+    const nodes = this.toJSON().content ?? [];
+    if (blocks.length !== nodes.length) return; // can't align by position; leave sources as they are
+    this.ydoc.transact(() => {
+      nodes.forEach((node, i) => {
+        const raw = blocks[i].raw;
+        const sig = signature(node);
+        if (node.attrs?.src === raw && node.attrs?.sig === sig) return;
+        const el = this.fragment.get(i);
+        if (!(el instanceof Y.XmlElement)) return;
+        el.setAttribute("src", raw);
+        el.setAttribute("sig", sig);
+      });
+    }, { kind: "file", actor: "save" } satisfies EditOrigin);
+  }
+
+  /**
    * Merges new file content into the live doc.
    *
    * With `base` (the file content the live doc last agreed with), this is a
