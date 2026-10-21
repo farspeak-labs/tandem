@@ -59,6 +59,11 @@ export function reviewerName(): string {
 /** Shortens the user's real home folder to "~" (paths elsewhere, e.g. /Users/Storage, stay as they are). */
 export function tildePath(path: string): string {
   const home = typeof window === "undefined" ? undefined : (window as unknown as { tandem?: { home?: string } }).tandem?.home;
-  if (home && (path === home || path.startsWith(`${home}/`))) return `~${path.slice(home.length)}`;
+  if (!home) return path;
+  // Windows paths use backslashes and are case-insensitive.
+  const sep = home.includes("\\") ? "\\" : "/";
+  const same = sep === "\\" ? (a: string, b: string) => a.toLowerCase() === b.toLowerCase() : (a: string, b: string) => a === b;
+  if (same(path, home)) return "~";
+  if (same(path.slice(0, home.length + 1), home + sep)) return `~${path.slice(home.length)}`;
   return path;
 }

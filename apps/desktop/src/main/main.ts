@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
-import { BrowserWindow, Menu, Notification, app, dialog, nativeTheme, session, shell, type MenuItemConstructorOptions } from "electron";
+import { BrowserWindow, Menu, Notification, Tray, app, dialog, nativeImage, nativeTheme, session, shell, type MenuItemConstructorOptions } from "electron";
 import { cleanCopy } from "@tandem/core";
 import { marked } from "marked";
 import { startService, type RunningService } from "@tandem/service";
@@ -22,7 +22,10 @@ function log(message: string) {
     // logging must never break the app
   }
 }
+const isMac = process.platform === "darwin";
 const windows = new Map<string, BrowserWindow>();
+/** Windows/Linux: Tandem keeps running with no windows (agents may be waiting), so it lives in the tray. */
+let tray: Tray | null = null;
 const waiting = new Map<string, number>();
 const pendingOpen: string[] = [];
 let libraryWindow: BrowserWindow | null = null;
@@ -36,10 +39,23 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
 
-app.on("second-instance", () => {
+/** `.md` paths passed on the command line (Windows/Linux file associations and "Open with"). */
+function markdownArgs(argv: string[]): string[] {
+  return argv.slice(1).filter((a) => !a.startsWith("-") && /\.md$/i.test(a) && existsSync(a));
+}
+
+// On Windows/Linux, opening a file while Tandem runs starts a second instance with the path in argv.
+app.on("second-instance", (_event, argv) => {
+  const files = markdownArgs(argv);
+  if (files.length) {
+    for (const f of files) openPath(f);
+    return;
+  }
   const first = windows.values().next().value as BrowserWindow | undefined;
-  first?.show();
+  if (first) first.show();
+  else showLibrary();
 });
+if (!isMac) pendingOpen.push(...markdownArgs(process.argv));
 
 // Finder / Dock drops / Open Recent / `open -a Tandem file.md`.
 app.on("open-file", (event, path) => {
@@ -118,6 +134,8 @@ function savePrefs() {
 
 app.whenReady().then(async () => {
   prefs = loadPrefs();
+  // Windows needs an app id for notifications to show (matches the installer's appId).
+  if (process.platform === "win32") app.setAppUserModelId("com.farspeaklabs.tandem");
   // Follow macOS appearance changes so window backgrounds keep matching the page.
   nativeTheme.on("updated", () => {
     for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.setBackgroundColor(windowBackground());
@@ -131,6 +149,7 @@ app.whenReady().then(async () => {
     if (e.type === "doc.saved") windows.get(e.docId)?.setDocumentEdited(false);
   });
   buildMenu();
+  if (!isMac) createTray();
   for (const p of pendingOpen.splice(0)) openPath(p);
   // Opened by hand (not by `tandem open`): show the Library once nothing else asked for a window.
   setTimeout(() => {
@@ -138,16 +157,39 @@ app.whenReady().then(async () => {
   }, 1500);
 });
 
-/** The reviewer name: Settings › Your Name, else the macOS account's full name, else the login name. */
+/** The reviewer name: Your Name… setting, else the macOS account's full name, else the login name. */
 function userName(): string {
   if (prefs.userName?.trim()) return prefs.userName.trim();
-  try {
-    const full = execFileSync("/usr/bin/id", ["-F"], { encoding: "utf8" }).trim();
-    if (full) return full.split(/\s+/)[0];
-  } catch {
-    // fall through
+  if (isMac) {
+    try {
+      const full = execFileSync("/usr/bin/id", ["-F"], { encoding: "utf8" }).trim();
+      if (full) return full.split(/\s+/)[0];
+    } catch {
+      // fall through
+    }
   }
-  return userInfo().username;
+  const login = userInfo().username;
+  return login.charAt(0).toUpperCase() + login.slice(1);
+}
+
+/** Window chrome: the Mac's inset title bar with traffic lights; the standard frame elsewhere. */
+function chrome(): Partial<Electron.BrowserWindowConstructorOptions> {
+  return isMac ? { titleBarStyle: "hiddenInset" } : { autoHideMenuBar: false };
+}
+
+function createTray() {
+  const icon = nativeImage.createFromPath(join(__dirname, "tray.png"));
+  tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
+  tray.setToolTip("Tandem");
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "Open Library", click: () => showLibrary() },
+      { label: "Open…", click: () => void showOpenDialog() },
+      { type: "separator" },
+      { label: "Quit Tandem", click: () => app.quit() },
+    ]),
+  );
+  tray.on("click", () => showLibrary());
 }
 
 /** Matches the page's --bg so opening, resizing and closing never flash white in dark mode. */
@@ -168,7 +210,7 @@ function showLibrary() {
     minWidth: 760,
     minHeight: 480,
     title: "Tandem Library",
-    titleBarStyle: "hiddenInset",
+    ...chrome(),
     backgroundColor: windowBackground(),
     show: false,
     webPreferences: {
@@ -217,7 +259,7 @@ function showDoc(docId: string, path: string) {
     minWidth: 640,
     minHeight: 480,
     title: service.docs.get(docId)?.title() ?? "Tandem",
-    titleBarStyle: "hiddenInset",
+    ...chrome(),
     backgroundColor: windowBackground(),
     // Debug switches for the latency bench (scripts/bench-electron.ts).
     ...(process.env.TANDEM_VIBRANCY === "1" ? { backgroundColor: "#00000000", vibrancy: "under-window" as const } : {}),
@@ -231,7 +273,7 @@ function showDoc(docId: string, path: string) {
       additionalArguments: [`--tandem=${JSON.stringify({ baseUrl: service.url, token: service.token, docId, userName: userName(), home: homedir() })}`],
     },
   });
-  win.setRepresentedFilename(path);
+  if (isMac) win.setRepresentedFilename(path);
   windows.set(docId, win);
   win.on("close", () => log(`window close ${docId}`));
   win.on("closed", () => windows.delete(docId));
@@ -251,7 +293,10 @@ function onAgentWaiting(docId: string, count: number) {
   const before = waiting.get(docId) ?? 0;
   waiting.set(docId, count);
   const total = [...waiting.values()].filter((c) => c > 0).length;
-  app.dock?.setBadge(total ? String(total) : "");
+  if (isMac) app.dock?.setBadge(total ? String(total) : "");
+  else tray?.setToolTip(total ? `Tandem — ${total} waiting for your review` : "Tandem");
+  // Windows/Linux have no Dock badge: flash the document's taskbar button instead.
+  if (!isMac && count > 0) windows.get(docId)?.flashFrame(true);
   if (before === 0 && count > 0 && service) {
     const open = service.docs.get(docId);
     const win = windows.get(docId);
@@ -281,7 +326,7 @@ async function askUserName() {
   });
   const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
   const html = `<!doctype html><meta charset="utf-8"><style>
-    :root{color-scheme:light dark} body{font:13px -apple-system,sans-serif;margin:16px}
+    :root{color-scheme:light dark} body{font:13px -apple-system,"Segoe UI",sans-serif;margin:16px}
     input{width:100%;box-sizing:border-box;font:inherit;padding:6px 8px;margin:6px 0 10px}
     .row{display:flex;justify-content:flex-end;gap:8px}</style>
     <label>Name shown on your comments and reviews</label>
@@ -320,7 +365,7 @@ async function exportFocused(format: "md" | "pdf") {
   }
   const html = `<!doctype html><meta charset="utf-8"><title>${open.title().replace(/</g, "&lt;")}</title>
 <style>
-  body { font: 11pt/1.55 -apple-system, "Helvetica Neue", sans-serif; color: #111; max-width: 46em; margin: 0 auto; }
+  body { font: 11pt/1.55 -apple-system, "Segoe UI", "Helvetica Neue", sans-serif; color: #111; max-width: 46em; margin: 0 auto; }
   h1, h2, h3 { line-height: 1.25; margin: 1.4em 0 .5em; } h1 { font-size: 22pt; } h2 { font-size: 16pt; } h3 { font-size: 13pt; }
   code { font: 9.5pt ui-monospace, Menlo, monospace; background: #f3f3f3; padding: 0 .2em; border-radius: 3px; }
   pre { background: #f6f6f6; padding: .8em 1em; border-radius: 6px; overflow: hidden; white-space: pre-wrap; }
@@ -351,9 +396,10 @@ function command(name: string) {
 }
 
 function buildMenu() {
-  const template: MenuItemConstructorOptions[] = [
-    {
-      role: "appMenu",
+  const appMenu: MenuItemConstructorOptions[] = isMac
+    ? [
+        {
+          role: "appMenu",
       submenu: [
         { role: "about" },
         { type: "separator" },
@@ -367,12 +413,16 @@ function buildMenu() {
         { type: "separator" },
         { role: "quit" },
       ],
-    },
+        },
+      ]
+    : [];
+  const template: MenuItemConstructorOptions[] = [
+    ...appMenu,
     {
       label: "File",
       submenu: [
         { label: "Open…", accelerator: "CmdOrCtrl+O", click: () => void showOpenDialog() },
-        { role: "recentDocuments", submenu: [{ role: "clearRecentDocuments" }] },
+        ...(isMac ? [{ role: "recentDocuments", submenu: [{ role: "clearRecentDocuments" }] } as MenuItemConstructorOptions] : []),
         { type: "separator" },
         {
           label: "Export Clean Copy",
@@ -382,7 +432,14 @@ function buildMenu() {
           ],
         },
         { type: "separator" },
-        { role: "close" },
+        ...(isMac
+          ? [{ role: "close" } as MenuItemConstructorOptions]
+          : ([
+              { label: "Your Name…", click: () => void askUserName() },
+              { type: "separator" },
+              { role: "close" },
+              { label: "Quit Tandem", accelerator: "Ctrl+Q", click: () => app.quit() },
+            ] as MenuItemConstructorOptions[])),
       ],
     },
     {
@@ -440,11 +497,10 @@ function buildMenu() {
         { label: "Library", accelerator: "CmdOrCtrl+Shift+L", click: () => showLibrary() },
         { type: "separator" },
         { role: "minimize" },
-        { role: "zoom" },
-        { type: "separator" },
-        { role: "front" },
+        ...(isMac ? ([{ role: "zoom" }, { type: "separator" }, { role: "front" }] as MenuItemConstructorOptions[]) : []),
       ],
     },
+    ...(isMac ? [] : [{ role: "help", submenu: [{ role: "about" }] } as MenuItemConstructorOptions]),
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

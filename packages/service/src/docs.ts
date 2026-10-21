@@ -345,6 +345,15 @@ export function wordDiff(a: string, b: string) {
   return diffWordsWithSpace(a, b).map((p) => ({ value: p.value, added: p.added || undefined, removed: p.removed || undefined }));
 }
 
+/**
+ * The real path with the filesystem's own spelling. On Windows (and default
+ * macOS) paths are case-insensitive, so `C:\Plans\a.md` and `c:\plans\a.md`
+ * must be the same document.
+ */
+export function canonicalPath(path: string): string {
+  return realpathSync.native(path);
+}
+
 export function atomicWrite(path: string, content: string) {
   const tmp = join(dirname(path), `.${basename(path)}.tandem-${process.pid}.tmp`);
   let mode: number | undefined;
@@ -354,7 +363,17 @@ export function atomicWrite(path: string, content: string) {
     mode = undefined;
   }
   writeFileSync(tmp, content, { encoding: "utf8", mode });
-  renameSync(tmp, path);
+  // Windows: a virus scanner or another editor can hold the file for a moment (EPERM/EBUSY).
+  for (let attempt = 0; ; attempt++) {
+    try {
+      renameSync(tmp, path);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (attempt >= 8 || (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES")) throw err;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25 * (attempt + 1));
+    }
+  }
 }
 
 function mentionsIn(body: string): string[] {
@@ -389,8 +408,10 @@ function findAnchor(body: string, anchor: string): number {
 
 /** Docs in temporary folders get an Inbox copy so they survive cleanup. */
 export function isTransient(absPath: string): boolean {
-  const roots = [tmpdir(), "/tmp/", "/private/tmp/", "/private/var/folders/", "/var/folders/", join(homedir(), "Downloads")];
-  return roots.some((r) => absPath.startsWith(r.endsWith("/") ? r : `${r}/`)) || absPath.includes("/scratchpad/");
+  const norm = (p: string) => p.replace(/\\/g, "/").toLowerCase();
+  const path = norm(absPath);
+  const roots = [tmpdir(), "/tmp", "/private/tmp", "/private/var/folders", "/var/folders", join(homedir(), "Downloads")].map(norm);
+  return roots.some((r) => path.startsWith(r.endsWith("/") ? r : `${r}/`)) || path.includes("/scratchpad/");
 }
 
 function projectFor(absPath: string): string | null {
@@ -402,7 +423,7 @@ function projectFor(absPath: string): string | null {
       try {
         if (statSync(git).isFile()) {
           const m = /gitdir:\s*(.+)/.exec(readFileSync(git, "utf8"));
-          const main = m?.[1].trim().split("/.git/")[0];
+          const main = m?.[1].trim().split(/[\\/]\.git[\\/]/)[0];
           if (main) return basename(main);
         }
       } catch {
@@ -480,7 +501,7 @@ export class DocService {
   open(path: string, opts: OpenOptions = {}): OpenDoc {
     if (!path.toLowerCase().endsWith(".md")) throw new Error(`Not a Markdown file: ${path}`);
     if (!existsSync(path)) throw new Error(`File not found: ${path}`);
-    const abs = realpathSync(path);
+    const abs = canonicalPath(path);
     const docId = docIdFor(abs);
     let open = this.docs.get(docId);
     if (!open) {
@@ -529,7 +550,7 @@ export class DocService {
 
   resolve(ref: { docId?: string; path?: string }): OpenDoc | undefined {
     if (ref.docId) return this.docs.get(ref.docId);
-    if (ref.path && existsSync(ref.path)) return this.docs.get(docIdFor(realpathSync(ref.path)));
+    if (ref.path && existsSync(ref.path)) return this.docs.get(docIdFor(canonicalPath(ref.path)));
     return undefined;
   }
 

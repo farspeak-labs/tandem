@@ -1,3 +1,4 @@
+import { isMac } from "../../lib/keys";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryApi } from "../../lib/library-api";
 import { clickSelection, cleanQuery, sourceKey, sourceQuery, type LibraryDoc, type LibraryQuery, type Facets, type Source } from "../../lib/library";
@@ -256,7 +257,7 @@ export function Library({ api }: { api: LibraryApi }) {
               </button>
             </div>
           ) : (
-            <span className="lib-statusbar__hint">{docs && list.length ? "Double-click or press Return to open · ⌘-click to select several" : ""}</span>
+            <span className="lib-statusbar__hint">{docs && list.length ? `Double-click or press Return to open · ${isMac ? "⌘" : "Ctrl"}-click to select several` : ""}</span>
           )}
           <span className={`lib-statusbar__notice ${error || notice?.error ? "is-error" : ""}`} role="status" aria-live="polite">
             {error ?? notice?.text ?? ""}

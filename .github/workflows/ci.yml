@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm vitest run
+      - name: Typecheck the app
+        run: pnpm --filter @tandem/desktop typecheck:renderer
+      - name: Build the app and CLI
+        run: |
+          pnpm --filter @tandem/desktop build:main
+          pnpm --filter @tandem/desktop build:renderer
+          pnpm --filter @farspeak-labs/tandem build
+        shell: bash
+
+  windows-installer:
+    name: Windows installer
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Unsigned for now: Windows shows "unknown publisher" on first run.
+      - run: pnpm --filter @tandem/desktop package:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tandem-windows
+          path: apps/desktop/out/*.exe
+          if-no-files-found: error

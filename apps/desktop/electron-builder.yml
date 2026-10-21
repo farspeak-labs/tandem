@@ -26,3 +26,14 @@ fileAssociations:
     name: Markdown document
     role: Editor
     rank: Alternate
+win:
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+  artifactName: "Tandem-${version}-win-${arch}.${ext}"
+nsis:
+  # Per-user install by default (%LOCALAPPDATA%\Programs\Tandem, where `tandem` looks for it); no admin rights needed.
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: Tandem

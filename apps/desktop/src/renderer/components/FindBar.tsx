@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useEditorState, type Editor } from "@tiptap/react";
 import { findStep, getFind, replaceAll, replaceCurrent, scrollToPos, selectCurrent, setFind } from "../editor/find-replace";
 import type { Mode } from "../editor/suggest-mode";
-import { withKey } from "../lib/keys";
+import { kbd, withKey } from "../lib/keys";
 
 interface Props {
   editor: Editor;
@@ -164,7 +164,7 @@ export function FindBar({ editor, mode, replace, focusTick, onReplace, onClose }
           </button>
           <button
             className="text-button findbar__action"
-            title={`${replaceTitle.replace("Replace", "Replace all")} (⌘↩)`}
+            title={`${replaceTitle.replace("Replace", "Replace all")} (${kbd("Mod-Enter")})`}
             disabled={readOnly || !s.count}
             onClick={() => doReplace(true)}
           >

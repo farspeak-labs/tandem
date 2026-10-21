@@ -233,7 +233,7 @@ button {
   align-items: center;
   gap: 16px;
   min-height: 52px;
-  padding: 8px 16px 8px 84px; /* room for traffic lights under hiddenInset */
+  padding: 8px 16px; /* Windows/Linux: standard window frame */
   /* Solid, not a blur: nothing scrolls beneath the title bar, and a backdrop
      filter here repainted on every scroll frame (visible flicker). */
   background: var(--bg-chrome-solid, var(--bg));
@@ -241,6 +241,11 @@ button {
   -webkit-app-region: drag;
   position: relative;
   z-index: 20;
+}
+
+/* macOS: the window draws traffic lights inside our title bar (hiddenInset). */
+.platform-darwin .titlebar {
+  padding-left: 84px;
 }
 
 .titlebar button,

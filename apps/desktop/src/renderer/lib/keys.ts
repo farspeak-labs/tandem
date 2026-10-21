@@ -1,7 +1,7 @@
-const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
+export const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 
-const MAC: Record<string, string> = { Mod: "⌘", Alt: "⌥", Shift: "⇧", Up: "↑", Down: "↓" };
-const PC: Record<string, string> = { Mod: "Ctrl", Alt: "Alt", Shift: "Shift", Up: "Up", Down: "Down" };
+const MAC: Record<string, string> = { Mod: "⌘", Alt: "⌥", Shift: "⇧", Up: "↑", Down: "↓", Enter: "↩" };
+const PC: Record<string, string> = { Mod: "Ctrl", Alt: "Alt", Shift: "Shift", Up: "Up", Down: "Down", Enter: "Enter" };
 
 /** Human label for a TipTap-style key spec, e.g. `Mod-Shift-x` → `⌘⇧X` (Mac) or `Ctrl+Shift+X`. */
 export function kbd(spec: string): string {

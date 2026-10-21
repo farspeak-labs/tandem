@@ -1,3 +1,4 @@
+import { kbd } from "../../lib/keys";
 import { forwardRef, useEffect, useState } from "react";
 import { STATUS_CHIPS } from "../../lib/library";
 
@@ -57,7 +58,7 @@ export const Toolbar = forwardRef<HTMLInputElement, Props>(function Toolbar(p, r
               }
             }}
           />
-          <kbd className="lib-search__kbd">⌘F</kbd>
+          <kbd className="lib-search__kbd">{kbd("Mod-f")}</kbd>
         </label>
       </div>
       <div className="lib-chips" role="radiogroup" aria-label="Status">

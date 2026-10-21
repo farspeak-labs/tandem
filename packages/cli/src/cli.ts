@@ -436,19 +436,27 @@ async function ensureServer(deps: Deps): Promise<ServerInfo> {
  * `TANDEM_APP` may point at a .app bundle or an executable.
  */
 function launchTandem() {
-  const candidates = [process.env.TANDEM_APP, "/Applications/Tandem.app", join(homedir(), "Applications/Tandem.app")];
+  const win = process.platform === "win32";
+  const candidates = win
+    ? [
+        process.env.TANDEM_APP,
+        // The installer's default per-user location, then a per-machine install.
+        process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, "Programs", "Tandem", "Tandem.exe"),
+        process.env.ProgramFiles && join(process.env.ProgramFiles, "Tandem", "Tandem.exe"),
+      ]
+    : [process.env.TANDEM_APP, "/Applications/Tandem.app", join(homedir(), "Applications/Tandem.app")];
   for (const c of candidates) {
     if (!c || !existsSync(c)) continue;
     if (c.endsWith(".app")) spawn("open", ["-g", "-a", c], { detached: true, stdio: "ignore" }).unref();
-    else spawn(c, [], { detached: true, stdio: "ignore" }).unref();
+    else spawn(c, [], { detached: true, stdio: "ignore", windowsHide: false }).unref();
     return;
   }
   // Dev fallback: run the desktop app from the repo checkout this CLI was built in.
   const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-  const electron = join(repo, "apps/desktop/node_modules/.bin/electron");
+  const electron = join(repo, "apps/desktop/node_modules/.bin", win ? "electron.cmd" : "electron");
   if (existsSync(electron)) {
-    spawn(electron, [join(repo, "apps/desktop")], { detached: true, stdio: "ignore" }).unref();
+    spawn(electron, [join(repo, "apps/desktop")], { detached: true, stdio: "ignore", shell: win }).unref();
     return;
   }
-  throw new Error("Tandem.app is not installed.");
+  throw new Error(win ? "Tandem is not installed (run the Tandem installer)." : "Tandem.app is not installed.");
 }
