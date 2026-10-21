@@ -410,7 +410,10 @@ function findAnchor(body: string, anchor: string): number {
 export function isTransient(absPath: string): boolean {
   const norm = (p: string) => p.replace(/\\/g, "/").toLowerCase();
   const path = norm(absPath);
-  const roots = [tmpdir(), "/tmp", "/private/tmp", "/private/var/folders", "/var/folders", join(homedir(), "Downloads")].map(norm);
+  const base = [tmpdir(), "/tmp", "/private/tmp", "/private/var/folders", "/var/folders", join(homedir(), "Downloads")];
+  // Also each root's canonical form: Windows reports %TEMP% as an 8.3 short name (C:\Users\RUNNER~1\…)
+  // while documents are opened by their full path.
+  const roots = [...base, ...base.flatMap((r) => (existsSync(r) ? [canonicalPath(r)] : []))].map(norm);
   return roots.some((r) => path.startsWith(r.endsWith("/") ? r : `${r}/`)) || path.includes("/scratchpad/");
 }
 

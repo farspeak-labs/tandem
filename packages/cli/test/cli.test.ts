@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -28,6 +28,20 @@ async function setup() {
     sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
   };
   return { file, out, deps, svc: svc! };
+}
+
+async function reviewPath(s: RunningService, path: string, outcome: string) {
+  const want = realpathSync.native(path);
+  const docs = (await (await fetch(`${s.url}/api/docs`, { headers: { Authorization: `Bearer ${s.token}` } })).json()) as {
+    docs: Array<{ docId: string; path: string }>;
+  };
+  const doc = docs.docs.find((d) => d.path === want);
+  if (!doc) throw new Error(`not open: ${want}`);
+  await fetch(`${s.url}/api/docs/${doc.docId}/review`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${s.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ outcome }),
+  });
 }
 
 async function review(s: RunningService, file: string, outcome: string, note?: string) {
@@ -124,16 +138,9 @@ describe("tandem CLI", () => {
     const second = join(mkdtempSync(join(tmpdir(), "tandem-doc-")), "plan.md");
     writeFileSync(second, "# Second\n");
     const run = runCli(["open", file, second], deps);
-    setTimeout(() => void review(svc, file, "approve"), 300);
-    setTimeout(async () => {
-      const docs = (await (await fetch(`${svc.url}/api/docs`, { headers: { Authorization: `Bearer ${svc.token}` } })).json()) as { docs: Array<{ docId: string; path: string }> };
-      const doc = docs.docs.find((d) => d.path.endsWith("plan.md") && d.path !== docs.docs.find((x) => x.path.endsWith(file.split("/").slice(-2).join("/")))?.path)!;
-      await fetch(`${svc.url}/api/docs/${doc.docId}/review`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${svc.token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ outcome: "changes" }),
-      });
-    }, 600);
+    // Review each document by its exact (canonical) path: both are called plan.md.
+    setTimeout(() => void reviewPath(svc, file, "approve"), 300);
+    setTimeout(() => void reviewPath(svc, second, "changes"), 600);
     expect(await run).toBe(EXIT.changes);
     expect(out.filter((l) => /plan\.md: (Approved|Changes requested)/.test(l))).toHaveLength(2);
   });
