@@ -98,10 +98,24 @@ export class TandemDocument {
   markWritten(markdown: string) {
     const blocks = segment(markdown).blocks;
     const nodes = this.toJSON().content ?? [];
-    if (blocks.length !== nodes.length) return; // can't align by position; leave sources as they are
+    // Usually one written block per node. When not (an empty paragraph writes only blank
+    // lines, which the file counts as part of the block before it), each node's source
+    // becomes its own serialization; merges compare sources ignoring trailing blank lines.
+    // Giving up here left edited blocks with stale sources, so an outside delete couldn't
+    // find them and they came back.
+    let rawFor: Array<string | undefined>;
+    if (blocks.length === nodes.length) rawFor = blocks.map((b) => b.raw);
+    else {
+      const ctx = this.context();
+      rawFor = nodes.map((n) => {
+        const text = blockMarkdown(n, ctx).text;
+        return text.trim() ? text : undefined;
+      });
+    }
     this.ydoc.transact(() => {
       nodes.forEach((node, i) => {
-        const raw = blocks[i].raw;
+        const raw = rawFor[i];
+        if (raw === undefined) return;
         const sig = signature(node);
         if (node.attrs?.src === raw && node.attrs?.sig === sig) return;
         const el = this.fragment.get(i);
@@ -153,7 +167,7 @@ export class TandemDocument {
     const ops = diffSequences(baseRaw, nextRaw);
     // Align base blocks to live nodes by their preserved source.
     const liveSrc = (this.toJSON().content ?? []).map((n) => (typeof n.attrs?.src === "string" ? n.attrs.src : null));
-    const baseToLive = alignByLcs(baseRaw, liveSrc);
+    const baseToLive = alignByLcs(baseRaw.map(trimBlock), liveSrc.map((x) => (x === null ? null : trimBlock(x))));
 
     this.ydoc.transact(() => {
       for (let k = ops.length - 1; k >= 0; k--) {
@@ -198,6 +212,9 @@ function mergeMap(live: Y.Map<Record<string, unknown>>, base: ReviewMap, next: R
     if (JSON.stringify(base[key]) !== JSON.stringify(value)) live.set(key, value);
   }
 }
+
+/** A block's source without the blank lines that separate it from the next block. */
+const trimBlock = (raw: string) => raw.replace(/\s+$/, "");
 
 /** For each `a` index, the matching `b` index (exact string match, order-preserving LCS). */
 function alignByLcs(a: string[], b: Array<string | null>): Array<number | undefined> {

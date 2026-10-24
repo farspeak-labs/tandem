@@ -56,3 +56,48 @@ describe("outside writes after in-app edits (git reset / stash)", () => {
     expect((h.doc.toMarkdown().match(/^## A$/gm) ?? []).length).toBe(1);
   });
 });
+
+function insertEmptyParagraph(doc: TandemDocument, index: number) {
+  doc.fragment.insert(index, [new Y.XmlElement("paragraph")]);
+}
+
+describe("outside writes when the doc has empty paragraphs", () => {
+  it("an agent deleting a section the reviewer edited does not bring it back", () => {
+    const h = harness(V1);
+    insertEmptyParagraph(h.doc, 4); // reviewer presses Enter twice: an empty line after "Alpha."
+    editBlock(h.doc, 6, "Edited: "); // and edits "Beta."
+    h.save();
+    expect(h.disk).toContain("Edited: Beta.");
+    // The agent folds section B away, starting from what is on disk.
+    const agent = h.disk.replace(/## B[\s\S]*$/, "");
+    h.outsideWrite(agent);
+    expect(h.doc.toMarkdown()).not.toContain("Beta.");
+    expect(h.doc.toMarkdown()).not.toContain("## B");
+  });
+
+  it("saving repeatedly keeps the empty lines as they are", () => {
+    const h = harness(V1);
+    insertEmptyParagraph(h.doc, 4);
+    h.save();
+    const first = h.disk;
+    editBlock(h.doc, 1, "More. ");
+    h.save();
+    editBlock(h.doc, 1, "Again. ");
+    h.save();
+    expect(h.disk).toBe(first.replace("Intro.", "Again. More. Intro."));
+  });
+
+  it("an agent dropping a reviewer's suggestion removes it instead of leaving an author-less insertion", () => {
+    const withSuggestion =
+      '# Plan\n\nIntro.\n\n## Out of scope\n\nKalshi.\n\n{++We can change whatever we need.++}{#s1}\n\n---\nsuggestions:\n  s1:\n    by: Ryan\n    at: "2026-10-24T18:00:00.000Z"\n';
+    const h = harness(withSuggestion);
+    insertEmptyParagraph(h.doc, 3);
+    editBlock(h.doc, 1, "Updated. ");
+    h.save();
+    h.outsideWrite("# Plan\n\nUpdated. Intro.\n\n**Scope:** anything the diagnostics need. Not Kalshi.\n");
+    const md = h.doc.toMarkdown();
+    expect(md).not.toContain("We can change");
+    expect(md).not.toContain("## Out of scope");
+    expect(h.doc.suggestions.size).toBe(0);
+  });
+});
