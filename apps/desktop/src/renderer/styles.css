@@ -810,6 +810,10 @@ button {
   max-width: 100%;
   height: auto;
 }
+/* Charts paint their own grey panel; let the page show through. */
+.tandem-prose .mermaid-diagram svg rect.background {
+  fill: transparent;
+}
 .tandem-prose .mermaid-diagram.is-loading {
   min-height: 4em;
 }

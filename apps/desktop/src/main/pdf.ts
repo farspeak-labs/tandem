@@ -3,6 +3,7 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { BrowserWindow } from "electron";
 import { marked } from "marked";
+import { fitMermaid } from "../shared/mermaid-fit";
 
 /**
  * Prints a clean copy (Markdown, markup already removed) to a Letter PDF.
@@ -30,7 +31,7 @@ export async function renderPdf(title: string, clean: string, paths: { mermaidJs
   tr, pre, blockquote { break-inside: avoid; }
   .diagram { margin: 1em 0; text-align: center; break-inside: avoid; }
   .diagram svg { max-width: 100%; height: auto; }
-</style>${marked.parse(clean.replace(/^---\n[\s\S]*?\n---\n/, ""))}`;
+</style>${marked.parse(withFittedDiagrams(clean.replace(/^---\n[\s\S]*?\n---\n/, "")))}`;
   const printer = new BrowserWindow({ show: false, webPreferences: { sandbox: true, javascript: diagrams } });
   try {
     if (diagrams) {
@@ -62,4 +63,9 @@ export async function renderPdf(title: string, clean: string, paths: { mermaidJs
   } finally {
     printer.destroy();
   }
+}
+
+/** Applies fitMermaid to every ```mermaid fence before the Markdown becomes HTML. */
+function withFittedDiagrams(markdown: string): string {
+  return markdown.replace(/^(\s*(`{3,}|~{3,})\s*mermaid\s*\n)([\s\S]*?)(\n\s*\2\s*$)/gim, (_m, open: string, _fence, code: string, close: string) => open + fitMermaid(code) + close);
 }

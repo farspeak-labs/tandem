@@ -2,6 +2,7 @@ import { Extension } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, TextSelection, type EditorState } from "@tiptap/pm/state";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
+import { fitMermaid } from "../../shared/mermaid-fit";
 
 type Rendered = { svg: string } | { error: string };
 type MermaidApi = (typeof import("mermaid"))["default"];
@@ -36,10 +37,15 @@ function render(code: string): Promise<Rendered> {
     const mermaid = await loadMermaid();
     if (apiTheme !== theme()) {
       apiTheme = theme();
-      mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: apiTheme as "dark" | "default", fontFamily: "inherit" });
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: "strict",
+        theme: apiTheme as "dark" | "default",
+        fontFamily: "inherit",
+      });
     }
     try {
-      const { svg } = await mermaid.render(`tandem-mermaid-${++renderSeq}`, code);
+      const { svg } = await mermaid.render(`tandem-mermaid-${++renderSeq}`, fitMermaid(code));
       return { svg };
     } catch (err) {
       document.getElementById(`dtandem-mermaid-${renderSeq}`)?.remove();
