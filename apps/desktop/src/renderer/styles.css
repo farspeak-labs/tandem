@@ -798,6 +798,7 @@ button {
   margin-bottom: 0.5em;
 }
 .tandem-prose .mermaid-diagram {
+  position: relative;
   margin: 1.35em 0;
   padding: 16px;
   border: 1px solid var(--doc-pre-border);
@@ -809,6 +810,31 @@ button {
 .tandem-prose .mermaid-diagram svg {
   max-width: 100%;
   height: auto;
+}
+.tandem-prose .mermaid-diagram__expand {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  color: var(--text-2);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.tandem-prose .mermaid-diagram:hover .mermaid-diagram__expand,
+.tandem-prose .mermaid-diagram__expand:focus-visible {
+  opacity: 1;
+}
+.tandem-prose .mermaid-diagram__expand:hover {
+  color: var(--text);
 }
 /* Charts paint their own grey panel; let the page show through. */
 .tandem-prose .mermaid-diagram svg rect.background {
@@ -2689,4 +2715,71 @@ button {
   text-overflow: ellipsis;
   max-width: 45%;
   color: var(--text-2);
+}
+
+/* Full-window diagram viewer */
+.diagram-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  -webkit-app-region: no-drag;
+}
+.diagram-viewer__stage {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  cursor: grab;
+}
+.diagram-viewer__stage.is-panning {
+  cursor: grabbing;
+}
+.diagram-viewer__canvas {
+  display: grid;
+  place-items: center;
+  min-width: 100%;
+  min-height: 100%;
+  width: max-content;
+  padding: 24px;
+  box-sizing: border-box;
+}
+.diagram-viewer__canvas svg rect.background {
+  fill: transparent;
+}
+.diagram-viewer__bar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-chrome);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-pop);
+  -webkit-app-region: no-drag;
+}
+.diagram-viewer__btn {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-2);
+  font: 13px var(--font);
+  cursor: pointer;
+}
+.diagram-viewer__btn:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.diagram-viewer__level {
+  min-width: 44px;
+  color: var(--text-2);
+  font: 12px var(--font);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }

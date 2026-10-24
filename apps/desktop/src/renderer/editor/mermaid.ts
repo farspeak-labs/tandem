@@ -3,6 +3,7 @@ import type { Node as PMNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, TextSelection, type EditorState } from "@tiptap/pm/state";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import { fitMermaid } from "../../shared/mermaid-fit";
+import { openDiagramViewer } from "./diagram-viewer";
 
 type Rendered = { svg: string } | { error: string };
 type MermaidApi = (typeof import("mermaid"))["default"];
@@ -69,10 +70,26 @@ function diagram(code: string, index: number) {
     el.className = "mermaid-diagram";
     el.contentEditable = "false";
     el.title = "Click to edit the diagram";
+    const expand = document.createElement("button");
+    expand.type = "button";
+    expand.className = "mermaid-diagram__expand";
+    expand.title = "Expand diagram";
+    expand.setAttribute("aria-label", "Expand diagram");
+    expand.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9"/></svg>';
+    expand.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    expand.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const svg = el.querySelector(":scope > svg");
+      if (svg) openDiagramViewer(svg.outerHTML);
+    });
     const show = (r: Rendered) => {
       if ("svg" in r) {
         lastGood.set(index, r.svg);
         el.innerHTML = r.svg;
+        el.append(expand);
         el.classList.remove("is-stale");
         return;
       }
