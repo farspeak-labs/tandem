@@ -5,8 +5,8 @@ import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 import { BrowserWindow, Menu, Notification, Tray, app, clipboard, dialog, ipcMain, nativeImage, nativeTheme, session, shell, type MenuItemConstructorOptions } from "electron";
 import { cleanCopy } from "@tandem/core";
-import { marked } from "marked";
 import { startService, type RunningService } from "@tandem/service";
+import { renderPdf } from "./pdf";
 
 /**
  * Tandem main process: hosts the doc service (one per user) and one window per document.
@@ -445,22 +445,7 @@ async function exportFocused(format: "md" | "pdf") {
     writeFileSync(filePath, clean);
     return;
   }
-  const html = `<!doctype html><meta charset="utf-8"><title>${open.title().replace(/</g, "&lt;")}</title>
-<style>
-  body { font: 11pt/1.55 -apple-system, "Segoe UI", "Helvetica Neue", sans-serif; color: #111; max-width: 46em; margin: 0 auto; }
-  h1, h2, h3 { line-height: 1.25; margin: 1.4em 0 .5em; } h1 { font-size: 22pt; } h2 { font-size: 16pt; } h3 { font-size: 13pt; }
-  code { font: 9.5pt ui-monospace, Menlo, monospace; background: #f3f3f3; padding: 0 .2em; border-radius: 3px; }
-  pre { background: #f6f6f6; padding: .8em 1em; border-radius: 6px; overflow: hidden; white-space: pre-wrap; }
-  pre code { background: none; padding: 0; }
-  table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 10pt; }
-  th, td { border: 1px solid #ccc; padding: .35em .6em; text-align: left; vertical-align: top; }
-  blockquote { margin: 1em 0; padding-left: 1em; border-left: 3px solid #ddd; color: #444; }
-  tr, pre, blockquote { break-inside: avoid; }
-</style>${marked.parse(clean.replace(/^---\n[\s\S]*?\n---\n/, ""))}`;
-  const printer = new BrowserWindow({ show: false, webPreferences: { sandbox: true, javascript: false } });
-  await printer.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-  const pdf = await printer.webContents.printToPDF({ pageSize: "Letter", printBackground: true, margins: { marginType: "default" } });
-  printer.destroy();
+  const pdf = await renderPdf(open.title(), clean, { mermaidJs: join(__dirname, "mermaid.min.js"), tempDir: app.getPath("temp") });
   writeFileSync(filePath, pdf);
 }
 

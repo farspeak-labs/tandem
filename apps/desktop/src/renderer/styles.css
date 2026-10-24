@@ -791,6 +791,38 @@ button {
   background: var(--doc-pre-bg);
   color: var(--doc-pre-text);
 }
+.tandem-prose pre.mermaid-source.is-collapsed {
+  display: none;
+}
+.tandem-prose pre.mermaid-source:not(.is-collapsed) {
+  margin-bottom: 0.5em;
+}
+.tandem-prose .mermaid-diagram {
+  margin: 1.35em 0;
+  padding: 16px;
+  border: 1px solid var(--doc-pre-border);
+  border-radius: 16px;
+  text-align: center;
+  cursor: pointer;
+  overflow-x: auto;
+}
+.tandem-prose .mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+.tandem-prose .mermaid-diagram.is-loading {
+  min-height: 4em;
+}
+.tandem-prose .mermaid-diagram.is-stale svg {
+  opacity: 0.45;
+}
+.tandem-prose .mermaid-diagram__error {
+  margin-top: 0.5em;
+  font-size: 0.8em;
+  color: var(--doc-muted);
+  text-align: left;
+  white-space: pre-wrap;
+}
 .tandem-prose pre code {
   padding: 0;
   background: transparent;

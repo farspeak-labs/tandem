@@ -17,3 +17,5 @@ await build({ ...common, entryPoints: ["src/main/preload.ts"], outfile: "dist/ma
 mkdirSync("dist/main", { recursive: true });
 copyFileSync("build/tray.png", "dist/main/tray.png");
 copyFileSync("build/drag-doc.png", "dist/main/drag-doc.png");
+// PDF export draws ```mermaid blocks with the standalone Mermaid bundle.
+copyFileSync("node_modules/mermaid/dist/mermaid.min.js", "dist/main/mermaid.min.js");

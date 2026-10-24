@@ -12,6 +12,7 @@ Plans stay plain Markdown files in your repos. Review feedback is stored in the 
 - **Agents edit live.** Agents can propose a revision (`tandem suggest`), comment, reply and resolve; changes appear in your open document as tracked suggestions, with the agent's name and caret. Outside edits to the file merge in without losing your unsaved work.
 - **Plan history.** Every hand-off and review is a round with word-level diffs and restore. When a plan is approved, intermediate rounds are pruned.
 - **Library.** Every plan Tandem has seen, by project, type and tags (from frontmatter), with folders, smart folders, pins, archive and full-text search across past rounds.
+- **Mermaid diagrams.** ` ```mermaid ` blocks render as diagrams; click one to edit its code, and PDF export draws them too.
 - **Clean export.** Suggestions accepted and review markup removed, as Markdown or PDF.
 
 ## Install

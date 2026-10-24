@@ -7,6 +7,7 @@ import { ME, type Session } from "../lib/session";
 import { DraftComment } from "./draft-comment";
 import { EditorKeys } from "./editor-keys";
 import { FindReplace } from "./find-replace";
+import { MermaidDiagrams } from "./mermaid";
 import { SuggestMode, type SuggestModeOptions } from "./suggest-mode";
 import { TableCellGuard } from "./table-guard";
 
@@ -37,5 +38,6 @@ export function editorExtensions(session: Session, suggest: Partial<SuggestModeO
     TableCellGuard,
     EditorKeys.configure({ getMode: suggest.getMode ?? (() => "edit") }),
     FindReplace,
+    MermaidDiagrams,
   ];
 }
