@@ -1,8 +1,9 @@
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
+import { promisify } from "node:util";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
-import { BrowserWindow, Menu, Notification, Tray, app, dialog, nativeImage, nativeTheme, session, shell, type MenuItemConstructorOptions } from "electron";
+import { BrowserWindow, Menu, Notification, Tray, app, clipboard, dialog, ipcMain, nativeImage, nativeTheme, session, shell, type MenuItemConstructorOptions } from "electron";
 import { cleanCopy } from "@tandem/core";
 import { marked } from "marked";
 import { startService, type RunningService } from "@tandem/service";
@@ -23,6 +24,7 @@ function log(message: string) {
   }
 }
 const isMac = process.platform === "darwin";
+const execFileAsync = promisify(execFile);
 const windows = new Map<string, BrowserWindow>();
 /** Windows/Linux: Tandem keeps running with no windows (agents may be waiting), so it lives in the tray. */
 let tray: Tray | null = null;
@@ -103,6 +105,86 @@ app.on("before-quit", async (event) => {
   ]);
   log("quitting");
   app.quit();
+});
+
+// ------------------------------------------------------------------ drag out & copy
+
+/** Only existing Markdown files may leave the app by drag or clipboard. */
+function exportablePaths(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  return input.filter((p): p is string => typeof p === "string" && /\.md$/i.test(p) && existsSync(p));
+}
+
+/** The Markdown as Tandem would save it (live edits included), else the file on disk. */
+function markdownOf(path: string): string {
+  const live = service?.docs.resolve({ path });
+  return live ? live.markdown() : readFileSync(path, "utf8");
+}
+
+/**
+ * Puts files on the clipboard so Finder/Explorer paste copies them and Mail/Slack attach them.
+ * Electron's clipboard only does text and images, so this uses each OS's own pasteboard API.
+ */
+async function copyFiles(paths: string[]): Promise<boolean> {
+  if (process.platform === "darwin") {
+    const script = `function run(argv) {
+      ObjC.import("AppKit");
+      const pb = $.NSPasteboard.generalPasteboard;
+      pb.clearContents;
+      const urls = $.NSMutableArray.array;
+      for (const p of argv) urls.addObject($.NSURL.fileURLWithPath(p));
+      return pb.writeObjects(urls);
+    }`;
+    const { stdout } = await execFileAsync("/usr/bin/osascript", ["-l", "JavaScript", "-e", script, ...paths]);
+    return stdout.trim() === "true";
+  }
+  if (process.platform === "win32") {
+    // Paths go in as single-quoted PowerShell literals ('' escapes a quote).
+    const list = paths.map((p) => `'${p.replace(/'/g, "''")}'`).join(",");
+    const encoded = Buffer.from(`Set-Clipboard -LiteralPath @(${list})`, "utf16le").toString("base64");
+    await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", encoded], { windowsHide: true });
+    return true;
+  }
+  clipboard.writeText(paths.join("\n"));
+  return true;
+}
+
+const dragIcon = () => {
+  const icon = nativeImage.createFromPath(join(__dirname, "drag-doc.png"));
+  return icon.isEmpty() ? nativeImage.createFromPath(join(__dirname, "tray.png")) : icon;
+};
+
+ipcMain.on("tandem:drag-files", (event, input: unknown) => {
+  const paths = exportablePaths(input);
+  if (!paths.length) return;
+  log(`drag out ${paths.length} file(s)`);
+  event.sender.startDrag({ file: paths[0], files: paths, icon: dragIcon() });
+});
+
+ipcMain.handle("tandem:copy", async (_event, kind: unknown, input: unknown) => {
+  const paths = exportablePaths(input);
+  if (!paths.length) return { ok: false, error: "Only existing Markdown files can be copied." };
+  switch (kind) {
+    case "file":
+      try {
+        if (!(await copyFiles(paths))) return { ok: false, error: "Couldn't put the file on the clipboard." };
+      } catch (err) {
+        log(`copy files failed: ${err instanceof Error ? err.message : String(err)}`);
+        return { ok: false, error: "Couldn't put the file on the clipboard." };
+      }
+      return { ok: true, message: paths.length > 1 ? `Copied ${paths.length} files` : "Copied file" };
+    case "path":
+      clipboard.writeText(paths.join("\n"));
+      return { ok: true, message: paths.length > 1 ? "Copied paths" : "Copied path" };
+    case "markdown":
+      clipboard.writeText(paths.map(markdownOf).join("\n\n"));
+      return { ok: true, message: "Copied Markdown" };
+    case "clean":
+      clipboard.writeText(paths.map((p) => cleanCopy(markdownOf(p))).join("\n\n"));
+      return { ok: true, message: "Copied clean copy" };
+    default:
+      return { ok: false, error: "Unknown copy kind" };
+  }
 });
 
 app.on("will-quit", () => log("will-quit"));

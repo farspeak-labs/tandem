@@ -10,6 +10,8 @@ interface Props {
   onClick(e: React.MouseEvent): void;
   onDoubleClick(): void;
   onMenu(anchor: Anchor): void;
+  /** Drag the document (or the current selection) out to Finder, Mail, Slack… */
+  onDragOut(e: React.DragEvent): void;
   onTag(tag: string): void;
 }
 
@@ -35,7 +37,7 @@ function Snippet({ doc }: { doc: LibraryDoc }) {
 }
 
 /** One document in the library list. */
-export function DocRow({ doc, selected, cursor, menuOpen, onClick, onDoubleClick, onMenu, onTag }: Props) {
+export function DocRow({ doc, selected, cursor, menuOpen, onClick, onDoubleClick, onMenu, onDragOut, onTag }: Props) {
   const updated = relativeTime(doc.updatedAt);
   return (
     <div
@@ -46,6 +48,8 @@ export function DocRow({ doc, selected, cursor, menuOpen, onClick, onDoubleClick
       className={`doc-row ${selected ? "is-selected" : ""} ${cursor ? "is-cursor" : ""} ${menuOpen ? "is-menu" : ""} ${doc.archived ? "is-archived" : ""}`}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      draggable
+      onDragStart={onDragOut}
       onContextMenu={(e) => {
         e.preventDefault();
         onMenu(anchorFromEvent(e));

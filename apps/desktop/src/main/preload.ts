@@ -12,6 +12,10 @@ contextBridge.exposeInMainWorld("tandem", {
   userName: config.userName,
   home: config.home,
   platform: process.platform,
+  /** Starts a native file drag (Finder, Mail, Slack…) for these Markdown files. */
+  startDrag: (paths: string[]) => ipcRenderer.send("tandem:drag-files", paths),
+  /** Copies files, paths, Markdown or a clean copy to the clipboard. */
+  copy: (kind: "file" | "path" | "markdown" | "clean", paths: string[]) => ipcRenderer.invoke("tandem:copy", kind, paths),
 });
 
 // Native menu commands → the page (Workspace / Library listen for "tandem:command").

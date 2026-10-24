@@ -1,3 +1,4 @@
+import { dragDocuments } from "../../lib/desktop";
 import { isMac } from "../../lib/keys";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryApi } from "../../lib/library-api";
@@ -228,6 +229,11 @@ export function Library({ api }: { api: LibraryApi }) {
                   onClick={(e) => onRowClick(doc, e)}
                   onDoubleClick={() => void open(doc)}
                   onMenu={(anchor) => openMenu(doc.docId, anchor)}
+                  onDragOut={(e) => {
+                    // Dragging a selected row takes the whole selection along.
+                    const ids = selected.has(doc.docId) ? [...selected] : [doc.docId];
+                    dragDocuments(e, ids.map((id) => byId.get(id)?.path).filter((p): p is string => Boolean(p)));
+                  }}
                   onTag={(tag) => select({ kind: "tag", value: tag })}
                 />
               ))}
@@ -275,6 +281,7 @@ export function Library({ api }: { api: LibraryApi }) {
           onOpen={(d) => void open(d)}
           onChanged={refresh}
           onError={(text) => setNotice({ text, error: true })}
+          onNotice={(text) => setNotice({ text })}
           onClose={() => setMenu(null)}
         />
       )}

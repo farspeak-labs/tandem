@@ -16,3 +16,4 @@ await build({ ...common, entryPoints: ["src/main/preload.ts"], outfile: "dist/ma
 // Tray icon for Windows/Linux (Tandem lives in the tray when no window is open).
 mkdirSync("dist/main", { recursive: true });
 copyFileSync("build/tray.png", "dist/main/tray.png");
+copyFileSync("build/drag-doc.png", "dist/main/drag-doc.png");

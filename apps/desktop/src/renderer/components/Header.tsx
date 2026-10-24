@@ -1,3 +1,4 @@
+import { copyDocuments, dragDocuments, type CopyKind } from "../lib/desktop";
 import { tildePath } from "../lib/connection";
 import { StatusBadge } from "./library/DocRow";
 
@@ -65,19 +66,27 @@ function shortPath(path: string) {
 }
 
 export function Header(p: Props) {
-  const [copied, setCopied] = useState(false);
+  // Brief confirmation shown in place of the path ("Copied path", "Copied file"…).
+  const [flash, setFlash] = useState<string | null>(null);
   const info = p.status.info;
   const title = info?.title ?? "Untitled";
   const path = info?.path ?? "";
 
+  const show = (text: string) => {
+    setFlash(text);
+    setTimeout(() => setFlash(null), 1400);
+  };
   const copyPath = async () => {
     try {
       await navigator.clipboard.writeText(path);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
+      show("Copied path");
     } catch {
       /* clipboard unavailable */
     }
+  };
+  const copyAndTell = async (kind: CopyKind) => {
+    if (!path) return;
+    show((await copyDocuments(kind, [path])).text);
   };
 
   return (
@@ -87,8 +96,14 @@ export function Header(p: Props) {
           {title}
         </div>
         {path && (
-          <button className="titlebar__path" onClick={copyPath} title="Copy path">
-            {copied ? "Copied path" : shortPath(path)}
+          <button
+            className="titlebar__path"
+            onClick={copyPath}
+            title="Click to copy the path · drag to move the file into another app"
+            draggable
+            onDragStart={(e) => dragDocuments(e, [path])}
+          >
+            {flash ?? shortPath(path)}
           </button>
         )}
       </div>
@@ -172,6 +187,10 @@ export function Header(p: Props) {
             { separator: true },
             { label: `Accept all suggestions${p.openSuggestions ? ` (${p.openSuggestions})` : ""}`, onSelect: p.onAcceptAll, disabled: !p.openSuggestions },
             { label: "Reject all suggestions", onSelect: p.onRejectAll, disabled: !p.openSuggestions },
+            { separator: true },
+            { label: "Copy file", onSelect: () => void copyAndTell("file") },
+            { label: "Copy Markdown", onSelect: () => void copyAndTell("markdown") },
+            { label: "Copy clean copy", onSelect: () => void copyAndTell("clean") },
             { separator: true },
             {
               label: `${p.agentEdits === "direct" ? "✓ " : ""}Let agents edit directly`,

@@ -1,3 +1,4 @@
+import { copyDocuments, type CopyKind } from "../../lib/desktop";
 import { useMemo, useState } from "react";
 import type { LibraryApi } from "../../lib/library-api";
 import {
@@ -27,6 +28,8 @@ interface Props {
   onOpen(doc: LibraryDoc): void;
   onChanged(): void;
   onError(message: string): void;
+  /** Short confirmation for the status bar (e.g. "Copied file"). */
+  onNotice?(message: string): void;
   onClose(): void;
 }
 
@@ -104,6 +107,10 @@ export function DocActions(p: Props) {
       </>
     );
   } else {
+    const copy = (kind: CopyKind) => {
+      p.onClose();
+      void copyDocuments(kind, p.docs.map((d) => d.path)).then((r) => (r.ok ? p.onNotice?.(r.text) : p.onError(r.text)));
+    };
     const items: MenuItem[] = [];
     if (!many) items.push({ label: "Open", onSelect: () => (p.onClose(), p.onOpen(p.docs[0])) }, { separator: true });
     items.push(
@@ -112,6 +119,15 @@ export function DocActions(p: Props) {
       { label: "Edit tags…", onSelect: () => setPanel("tags") },
       { label: "Set type…", onSelect: () => setPanel("type") },
       { label: "Mark status…", onSelect: () => setPanel("status") },
+      { separator: true },
+      { label: many ? "Copy Files" : "Copy File", onSelect: () => copy("file") },
+      ...(many
+        ? []
+        : [
+            { label: "Copy Markdown", onSelect: () => copy("markdown") },
+            { label: "Copy Clean Copy", onSelect: () => copy("clean") },
+          ]),
+      { label: many ? "Copy Paths" : "Copy Path", onSelect: () => copy("path") },
       { separator: true },
       { label: allArchived ? "Unarchive" : "Archive", onSelect: () => run(() => ({ archived: !allArchived })) },
     );
