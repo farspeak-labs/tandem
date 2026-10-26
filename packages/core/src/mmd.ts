@@ -424,3 +424,31 @@ export function parseMmdMetadata(block: string): Array<{ key: string; value: str
 }
 
 export const isMmdMetadata = (frontmatter: string) => frontmatter !== "" && !/^---/.test(frontmatter);
+
+/** Metadata as data: keys normalized (`metaKey`), `tags` split on commas. */
+export function mmdMetadataData(block: string): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const { key, value } of parseMmdMetadata(block)) {
+    const k = metaKey(key);
+    out[k] = k === "tags" || k === "keywords" ? value.split(",").map((t) => t.trim()).filter(Boolean) : value;
+  }
+  return out;
+}
+
+/** Sets (or, with `null`, removes) one key in an MMD metadata block, keeping the other lines as written. */
+export function setMmdMetadata(block: string, key: string, value: string | null): string {
+  const lines = block.replace(/\n$/, "").split("\n");
+  const at = lines.findIndex((l) => {
+    const m = META_LINE.exec(l);
+    return m && !/^[ \t]/.test(l) && metaKey(m[1]) === metaKey(key);
+  });
+  if (at >= 0) {
+    let end = at + 1;
+    while (end < lines.length && /^[ \t]+\S/.test(lines[end])) end++;
+    lines.splice(at, end - at, ...(value === null ? [] : [`${lines[at].slice(0, lines[at].indexOf(":"))}: ${value}`]));
+  } else if (value !== null) {
+    lines.push(`${key}: ${value}`);
+  }
+  const text = lines.filter((l, i) => l !== "" || i < lines.length - 1).join("\n");
+  return text ? `${text}\n` : "";
+}

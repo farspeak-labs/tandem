@@ -1,7 +1,18 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, watch, writeFileSync, type FSWatcher } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { TandemDocument, replaceSection, splitEndmatter, suggestChanges, type EditOrigin } from "@tandem/core";
+import {
+  TandemDocument,
+  isMarkdownPath,
+  isMmdMetadata,
+  mmdMetadataData,
+  replaceSection,
+  setMmdMetadata,
+  splitEndmatter,
+  stripMarkdownExt,
+  suggestChanges,
+  type EditOrigin,
+} from "@tandem/core";
 import * as Y from "yjs";
 import { createTwoFilesPatch, diffWordsWithSpace } from "diff";
 import { parseDocument as parseYamlDocument } from "yaml";
@@ -202,7 +213,8 @@ export class OpenDoc {
     const json = this.doc.toJSON();
     const h1 = json.content?.find((n) => n.type === "heading" && n.attrs?.level === 1);
     const text = (h1?.content ?? []).map((c) => c.text ?? "").join("").trim();
-    return text || basename(this.path).replace(/\.md$/i, "");
+    const meta = this.frontmatterData().title;
+    return text || (typeof meta === "string" && meta.trim()) || stripMarkdownExt(basename(this.path));
   }
 
   markdown(): string {
@@ -250,6 +262,21 @@ export class OpenDoc {
     if (!opts.tags && !opts.type) return;
     if (!opts.replaceTags && !opts.tags?.length && !opts.type) return;
     const fm = this.doc.meta.get("frontmatter") ?? "";
+    if (isMmdMetadata(fm)) {
+      // MMD metadata stays MMD: `Type: plan`, `Tags: a, b`.
+      const data = mmdMetadataData(fm);
+      let next = fm;
+      if (opts.type && data.type !== opts.type) next = setMmdMetadata(next, "Type", opts.type);
+      if (opts.tags) {
+        const current = (data.tags as string[] | undefined) ?? [];
+        const tags = opts.replaceTags ? [...new Set(opts.tags)] : [...new Set([...current, ...opts.tags])];
+        if (JSON.stringify(tags) !== JSON.stringify(current)) next = setMmdMetadata(next, "Tags", tags.length ? tags.join(", ") : null);
+      }
+      if (next === fm) return;
+      this.doc.ydoc.transact(() => this.doc.meta.set("frontmatter", next), { kind: "user", actor: "tandem" } satisfies EditOrigin);
+      this.scheduleSave();
+      return;
+    }
     const yamlText = fm ? fm.replace(/^---[ \t]*\r?\n/, "").replace(/\r?\n---[ \t]*(?:\r?\n)?$/, "") : "";
     const ydoc = parseYamlDocument(yamlText);
     let changed = false;
@@ -284,6 +311,7 @@ export class OpenDoc {
   frontmatterData(): Record<string, unknown> {
     const fm = this.doc.meta.get("frontmatter") ?? "";
     if (!fm) return {};
+    if (isMmdMetadata(fm)) return mmdMetadataData(fm);
     try {
       return (parseYamlDocument(fm.replace(/^---[ \t]*\r?\n/, "").replace(/\r?\n---[ \t]*(?:\r?\n)?$/, "")).toJS() ?? {}) as Record<string, unknown>;
     } catch {
@@ -502,7 +530,7 @@ export class DocService {
   }
 
   open(path: string, opts: OpenOptions = {}): OpenDoc {
-    if (!path.toLowerCase().endsWith(".md")) throw new Error(`Not a Markdown file: ${path}`);
+    if (!isMarkdownPath(path)) throw new Error(`Not a Markdown file: ${path}`);
     if (!existsSync(path)) throw new Error(`File not found: ${path}`);
     const abs = canonicalPath(path);
     const docId = docIdFor(abs);

@@ -85,6 +85,18 @@ describe("library", () => {
     expect((await api("/api/library?archived=1")).docs).toHaveLength(1);
   });
 
+  it("reads and edits MultiMarkdown metadata in .mmd files", async () => {
+    const { write, api } = await setup();
+    const a = write("notes.mmd", "Title: Order path notes\nAuthor: Ryan\nTags: latency, dublin\n\nNo heading here, the title comes from metadata.\n");
+    const { docId } = await api("/api/open", { method: "POST", body: JSON.stringify({ path: a, show: false }) });
+    const doc = (await api("/api/library")).docs.find((d: any) => d.docId === docId);
+    expect(doc).toMatchObject({ title: "Order path notes", tags: ["latency", "dublin"] });
+
+    await api(`/api/library/${docId}`, { method: "PATCH", body: JSON.stringify({ tags: ["latency"], type: "notes" }) });
+    expect(readFileSync(a, "utf8")).toBe("Title: Order path notes\nAuthor: Ryan\nTags: latency\nType: notes\n\nNo heading here, the title comes from metadata.\n");
+    expect((await api("/api/library?type=notes")).docs).toHaveLength(1);
+  });
+
   it("finds text that only exists in a past round, and keeps an Inbox copy of temp-folder docs", async () => {
     const { home, api } = await setup();
     const tmpDoc = join(mkdtempSync(join(tmpdir(), "scratch-")), "draft.md");

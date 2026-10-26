@@ -4,7 +4,7 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 import { BrowserWindow, Menu, Notification, Tray, app, clipboard, dialog, ipcMain, nativeImage, nativeTheme, session, shell, type MenuItemConstructorOptions } from "electron";
-import { cleanCopy } from "@tandem/core";
+import { MARKDOWN_EXTENSIONS, cleanCopy, isMarkdownPath, stripMarkdownExt } from "@tandem/core";
 import { startService, type RunningService } from "@tandem/service";
 import { renderPdf } from "./pdf";
 
@@ -41,9 +41,9 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
 
-/** `.md` paths passed on the command line (Windows/Linux file associations and "Open with"). */
+/** Markdown paths passed on the command line (Windows/Linux file associations and "Open with"). */
 function markdownArgs(argv: string[]): string[] {
-  return argv.slice(1).filter((a) => !a.startsWith("-") && /\.md$/i.test(a) && existsSync(a));
+  return argv.slice(1).filter((a) => !a.startsWith("-") && isMarkdownPath(a) && existsSync(a));
 }
 
 // On Windows/Linux, opening a file while Tandem runs starts a second instance with the path in argv.
@@ -112,7 +112,7 @@ app.on("before-quit", async (event) => {
 /** Only existing Markdown files may leave the app by drag or clipboard. */
 function exportablePaths(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
-  return input.filter((p): p is string => typeof p === "string" && /\.md$/i.test(p) && existsSync(p));
+  return input.filter((p): p is string => typeof p === "string" && isMarkdownPath(p) && existsSync(p));
 }
 
 /** The Markdown as Tandem would save it (live edits included), else the file on disk. */
@@ -435,7 +435,7 @@ async function exportFocused(format: "md" | "pdf") {
     return;
   }
   const clean = cleanCopy(open.markdown());
-  const base = open.path.replace(/\.md$/i, "");
+  const base = stripMarkdownExt(open.path);
   const { canceled, filePath } = await dialog.showSaveDialog(focused!, {
     defaultPath: `${base}.clean.${format}`,
     filters: [format === "md" ? { name: "Markdown", extensions: ["md"] } : { name: "PDF", extensions: ["pdf"] }],
@@ -452,7 +452,7 @@ async function exportFocused(format: "md" | "pdf") {
 async function showOpenDialog() {
   const result = await dialog.showOpenDialog({
     properties: ["openFile", "multiSelections"],
-    filters: [{ name: "Markdown", extensions: ["md"] }],
+    filters: [{ name: "Markdown", extensions: MARKDOWN_EXTENSIONS }],
   });
   for (const p of result.filePaths) openPath(p);
 }

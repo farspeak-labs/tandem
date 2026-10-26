@@ -6,6 +6,9 @@ import { fileURLToPath } from "node:url";
 
 export const EXIT = { approved: 0, error: 1, usage: 2, timeout: 3, changes: 10 } as const;
 
+/** Markdown and MultiMarkdown files (same list as `MARKDOWN_EXTENSIONS` in @tandem/core). */
+const isMarkdownPath = (path: string) => /\.(?:md|markdown|mmd|multimarkdown)$/i.test(path);
+
 const WAIT_CHUNK_SECONDS = 50;
 
 interface ServerInfo {
@@ -105,15 +108,15 @@ export async function runCli(args: string[], deps: Deps = defaultDeps()): Promis
     switch (command) {
       case "open":
       case "wait": {
-        if (!file || !file.toLowerCase().endsWith(".md")) {
+        if (!file || !isMarkdownPath(file)) {
           deps.error(`Usage: tandem ${command} <file.md>`);
           return EXIT.usage;
         }
         const paths = files.map((f) => resolve(f));
-        const missing = paths.find((p) => !p.toLowerCase().endsWith(".md") || !existsSync(p));
+        const missing = paths.find((p) => !isMarkdownPath(p) || !existsSync(p));
         if (missing) {
-          deps.error(missing.toLowerCase().endsWith(".md") ? `File not found: ${missing}` : `Not a Markdown file: ${missing}`);
-          return missing.toLowerCase().endsWith(".md") ? EXIT.error : EXIT.usage;
+          deps.error(isMarkdownPath(missing) ? `File not found: ${missing}` : `Not a Markdown file: ${missing}`);
+          return isMarkdownPath(missing) ? EXIT.error : EXIT.usage;
         }
         if (paths.length === 1) return await openAndWait(deps, command, paths[0], flags);
         // Several plans handed over together: wait for every review; report each; exit 0 only if all approved.
@@ -127,14 +130,14 @@ export async function runCli(args: string[], deps: Deps = defaultDeps()): Promis
       case "reply":
       case "resolve":
       case "watch": {
-        if (!file || !file.toLowerCase().endsWith(".md")) {
+        if (!file || !isMarkdownPath(file)) {
           deps.error(`Usage: tandem ${command} <file.md> …`);
           return EXIT.usage;
         }
         return await agentAction(deps, command, resolve(file), args, flags);
       }
       case "export": {
-        if (!file || !file.toLowerCase().endsWith(".md")) return usage(deps, "tandem export <file.md> [--with-review] [--out FILE]");
+        if (!file || !isMarkdownPath(file)) return usage(deps, "tandem export <file.md> [--with-review] [--out FILE]");
         const server = await ensureServer(deps);
         const opened = await call(deps, server, "/api/open", { path: resolve(file), show: false });
         const res = await deps.fetch(`http://127.0.0.1:${server.port}/api/docs/${opened.docId}/export?clean=${flags.has("with-review") ? 0 : 1}`, {
@@ -152,7 +155,7 @@ export async function runCli(args: string[], deps: Deps = defaultDeps()): Promis
       }
       case "history":
       case "diff": {
-        if (!file || !file.toLowerCase().endsWith(".md")) {
+        if (!file || !isMarkdownPath(file)) {
           deps.error(`Usage: tandem ${command} <file.md>`);
           return EXIT.usage;
         }

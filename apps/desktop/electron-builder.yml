@@ -22,8 +22,12 @@ mac:
   extendInfo:
     LSMultipleInstancesProhibited: true
 fileAssociations:
-  - ext: md
+  - ext: [md, markdown]
     name: Markdown document
+    role: Editor
+    rank: Alternate
+  - ext: [mmd, multimarkdown]
+    name: MultiMarkdown document
     role: Editor
     rank: Alternate
 win:

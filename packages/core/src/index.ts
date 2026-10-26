@@ -8,3 +8,4 @@ export * from "./suggest";
 export * from "./sections";
 export * from "./export";
 export * from "./mmd";
+export * from "./files";
