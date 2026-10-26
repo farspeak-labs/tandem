@@ -5,9 +5,26 @@ import { LibraryApi } from "./lib/library-api";
 import { createSession, type Session } from "./lib/session";
 import { Workspace } from "./components/Workspace";
 import { Library } from "./components/library/Library";
+import { NotesWindow } from "./components/notes/NotesWindow";
 
 export function App() {
-  return resolveView() === "library" ? <LibraryApp /> : <DocApp />;
+  const view = resolveView();
+  return view === "library" ? <LibraryApp /> : view === "notes" ? <NotesApp /> : <DocApp />;
+}
+
+function NotesApp() {
+  const conn = useMemo(resolveServiceConnection, []);
+  if (!conn) {
+    return (
+      <div className="empty-state">
+        <h1>Notes unavailable</h1>
+        <p>
+          Couldn’t find the Tandem service. In dev, pass <code>?baseUrl=&amp;token=&amp;view=notes</code>.
+        </p>
+      </div>
+    );
+  }
+  return <NotesWindow conn={conn} />;
 }
 
 function LibraryApp() {

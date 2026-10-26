@@ -6,6 +6,7 @@ import { dirname, extname, join, resolve as resolvePath, sep } from "node:path";
 import { WebSocketServer } from "ws";
 import { cleanCopy } from "@tandem/core";
 import { DocService, unifiedDiff, wordDiff, type ServiceEvent } from "./docs";
+import { Notebooks, type NoteSort } from "./notebooks";
 import { Store } from "./store";
 
 export const VERSION = "0.1.0";
@@ -20,6 +21,8 @@ export interface ServiceOptions {
   onShow?: (docId: string, path: string) => void;
   /** Directory for Inbox copies of docs in temporary folders (default ~/Tandem/Inbox). */
   inboxDir?: string;
+  /** The default notebook (default ~/Notes, or $TANDEM_NOTES). Created on first use. */
+  notesDir?: string;
 }
 
 export interface RunningService {
@@ -40,6 +43,9 @@ export async function startService(opts: ServiceOptions = {}): Promise<RunningSe
   mkdirSync(home, { recursive: true });
   const store = new Store(join(home, "tandem.db"));
   const docs = new DocService(store, opts.inboxDir);
+  // Created on first use, so a service that never shows notes never touches ~/Notes.
+  let notebooksInstance: Notebooks | null = null;
+  const notebooks = () => (notebooksInstance ??= new Notebooks(docs, home, opts.notesDir ?? process.env.TANDEM_NOTES ?? undefined));
   const token = randomBytes(24).toString("hex");
   const startedAt = new Date().toISOString();
 
@@ -90,6 +96,41 @@ export async function startService(opts: ServiceOptions = {}): Promise<RunningSe
       });
       if (body.show !== false) opts.onShow?.(open.docId, open.path);
       return json(res, 200, { docId: open.docId, path: open.path, title: open.title(), cursor: docs.latestSequence() });
+    }
+
+    // Notebooks (folders of notes) and the notes in them.
+    if (url.pathname === "/api/notebooks") {
+      const nb = notebooks();
+      if (method === "GET") return json(res, 200, nb.list());
+      const body = await readJson(req);
+      const path = String(body.path ?? "");
+      try {
+        if (method === "POST") return json(res, 200, nb.add(path));
+        if (method === "PUT") return json(res, 200, nb.setCurrent(path));
+        if (method === "DELETE") return json(res, 200, nb.remove(path));
+      } catch (err) {
+        return json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    if (url.pathname === "/api/notes") {
+      const nb = notebooks();
+      if (method === "GET") {
+        const sort = url.searchParams.get("sort");
+        const docsList = nb.notes({
+          notebook: url.searchParams.get("notebook") ?? undefined,
+          q: url.searchParams.get("q") ?? undefined,
+          sort: sort === "title" || sort === "created" || sort === "modified" ? (sort as NoteSort) : undefined,
+        });
+        return json(res, 200, { docs: docsList });
+      }
+      if (method === "POST") {
+        const body = await readJson(req);
+        try {
+          return json(res, 200, nb.create(String(body.title ?? ""), typeof body.notebook === "string" ? body.notebook : undefined));
+        } catch (err) {
+          return json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+        }
+      }
     }
 
     if (method === "POST" && url.pathname === "/api/wait") {
@@ -379,6 +420,7 @@ export async function startService(opts: ServiceOptions = {}): Promise<RunningSe
     home,
     docs,
     async close() {
+      notebooksInstance?.close();
       docs.closeAll();
       for (const c of sse) c.res.end();
       for (const ws of wss.clients) ws.terminate();

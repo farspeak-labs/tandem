@@ -6,6 +6,8 @@ import {
   isMarkdownPath,
   isMmdMetadata,
   mmdMetadataData,
+  parseEndmatter,
+  splitFrontmatter,
   replaceSection,
   setMmdMetadata,
   splitEndmatter,
@@ -311,15 +313,9 @@ export class OpenDoc {
   }
 
   frontmatterData(): Record<string, unknown> {
-    const fm = this.doc.meta.get("frontmatter") ?? "";
-    if (!fm) return {};
-    if (isMmdMetadata(fm)) return mmdMetadataData(fm);
-    try {
-      return (parseYamlDocument(fm.replace(/^---[ \t]*\r?\n/, "").replace(/\r?\n---[ \t]*(?:\r?\n)?$/, "")).toJS() ?? {}) as Record<string, unknown>;
-    } catch {
-      return {};
-    }
+    return frontmatterData(this.doc.meta.get("frontmatter") ?? "");
   }
+
 
   private mergeDiskIfChanged() {
     if (!existsSync(this.path)) return;
@@ -493,6 +489,55 @@ export class DocService {
         if (open) this.index(open, true);
       }
     });
+  }
+
+  /**
+   * Indexes a Markdown file straight from disk, without loading a live document
+   * (notebooks can hold thousands of notes). A note that is open is indexed live.
+   * Its date is the file's modification time.
+   */
+  indexFile(path: string): string {
+    const abs = canonicalPath(path);
+    const docId = docIdFor(abs);
+    const live = this.docs.get(docId);
+    if (live) {
+      this.index(live);
+      return docId;
+    }
+    const md = readFileSync(abs, "utf8");
+    const { frontmatter, rest } = splitFrontmatter(md);
+    const fm = frontmatterData(frontmatter);
+    const h1 = /^#[ \t]+(.+?)[ \t]*#*[ \t]*$/m.exec(splitEndmatter(rest).body)?.[1]?.replace(/[*_`[\]]/g, "").trim();
+    const title = h1 || (typeof fm.title === "string" && fm.title.trim()) || stripMarkdownExt(basename(abs));
+    const mtime = statSync(abs).mtime.toISOString();
+    const tags = Array.isArray(fm.tags) ? fm.tags.map(String) : [];
+    this.store.upsertDoc({ docId, path: abs, title, project: projectFor(abs), type: typeof fm.type === "string" ? fm.type : null, tags, folders: [] }, mtime);
+    const { comments, suggestions } = parseEndmatter(splitEndmatter(md).endmatter);
+    const openComments = Object.values(comments).filter((c) => !c.re && !c.resolved && c.status !== "resolved").length;
+    this.library.indexCurrent(docId, title, md, { openComments, suggestions: Object.keys(suggestions).length });
+    this.store.db.prepare("UPDATE docs SET updated_at = ?, tags = ? WHERE doc_id = ?").run(mtime, JSON.stringify(tags), docId);
+    return docId;
+  }
+
+  /** indexFile, unless the index already has this file at its current modification time. */
+  indexFileIfChanged(path: string): boolean {
+    const abs = canonicalPath(path);
+    const rec = this.store.getDoc(docIdFor(abs));
+    if (rec && rec.updatedAt >= statSync(abs).mtime.toISOString() && !this.docs.has(rec.docId)) return false;
+    this.indexFile(abs);
+    return true;
+  }
+
+  /** Drops a deleted file from the index (its history rounds are kept). */
+  forget(docId: string) {
+    if (this.docs.has(docId)) return;
+    this.store.db.prepare("DELETE FROM search WHERE doc_id = ?").run(docId);
+    this.store.db.prepare("DELETE FROM docs WHERE doc_id = ?").run(docId);
+  }
+
+  forgetPath(path: string) {
+    const rec = this.store.listDocs().find((d) => d.path === path);
+    if (rec && !existsSync(rec.path)) this.forget(rec.docId);
   }
 
   /** Re-indexes title, text, counts and frontmatter metadata; mirrors temp-folder docs to the Inbox. */
@@ -672,5 +717,16 @@ export class DocService {
     for (const w of [...this.waiters]) this.finishWait(w, []);
     for (const d of this.docs.values()) d.close();
     this.docs.clear();
+  }
+}
+
+/** YAML frontmatter or MMD metadata as data ({} when there is none or it doesn't parse). */
+export function frontmatterData(fm: string): Record<string, unknown> {
+  if (!fm) return {};
+  if (isMmdMetadata(fm)) return mmdMetadataData(fm);
+  try {
+    return (parseYamlDocument(fm.replace(/^---[ \t]*\r?\n/, "").replace(/\r?\n---[ \t]*(?:\r?\n)?$/, "")).toJS() ?? {}) as Record<string, unknown>;
+  } catch {
+    return {};
   }
 }

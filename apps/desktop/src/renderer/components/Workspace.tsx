@@ -48,9 +48,9 @@ function idsAtSelection(editor: NonNullable<ReturnType<typeof useTandemEditor>>)
   return [...new Set(marks.map((m) => m.attrs.id as string | null).filter((id): id is string => !!id))];
 }
 
-export function Workspace({ session, api }: { session: Session; api: TandemApi }) {
-  // Plans open in Suggest mode: a reviewer's changes are tracked unless they choose Edit.
-  const [mode, setMode] = useState<Mode>("suggest");
+export function Workspace({ session, api, initialMode = "suggest", note = false }: { session: Session; api: TandemApi; initialMode?: Mode; note?: boolean }) {
+  // Plans open in Suggest mode: a reviewer's changes are tracked unless they choose Edit. Notes open in Edit.
+  const [mode, setMode] = useState<Mode>(initialMode);
   const modeRef = useRef<Mode>(mode);
   modeRef.current = mode;
   const [view, setView] = useState<ViewKind>("rich");
@@ -277,6 +277,7 @@ export function Workspace({ session, api }: { session: Session; api: TandemApi }
     >
       <style>{dynamicCss}</style>
       <Header
+        reviewChrome={!note}
         api={api}
         status={status}
         peers={peers}

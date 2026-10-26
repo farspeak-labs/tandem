@@ -14,6 +14,9 @@ Plans stay plain Markdown files in your repos. Review feedback is stored in the 
 - **Library.** Every plan Tandem has seen, by project, type and tags (from frontmatter), with folders, smart folders, pins, archive and full-text search across past rounds.
 - **Mermaid diagrams.** ` ```mermaid ` blocks render as diagrams; click one to edit its code, and PDF export draws them too.
 - **MultiMarkdown.** Opens `.md`, `.mmd` and `.multimarkdown` files and renders MMD 6: metadata, footnotes, math (`$…$`, `$$…$$`, `\\(…\\)`), definition lists, tables with merged cells and captions, sub/superscript, cross-references, citations, abbreviations, `{{TOC}}` and `{{file}}` includes. Click any of them to edit the source; editing never changes MMD syntax you didn't touch.
+- **What changed since your review.** When an agent hands a document back, a banner (with the agent's `--note`) and in-text marks show what it added, rewrote and removed since your last review.
+- **Notes.** Window ▸ Notes (⌘⇧N): folders of plain Markdown files as notebooks, one field to search or create (Enter on no match makes the note), the list and the editor side by side, outside edits picked up live. Default notebook `~/Notes`; double-click a note to give it its own window.
+- **Write mode.** View ▸ Write Mode (⌘⇧W): no chrome, reading typography and themes, Markdown that formats as you type, pasted Markdown arrives formatted; optional typewriter scrolling, paragraph focus, smart punctuation and a word goal.
 - **Clean export.** Suggestions accepted and review markup removed, as Markdown or PDF.
 
 ## Install

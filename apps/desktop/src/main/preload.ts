@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld("tandem", {
   startDrag: (paths: string[]) => ipcRenderer.send("tandem:drag-files", paths),
   /** Copies files, paths, Markdown or a clean copy to the clipboard. */
   copy: (kind: "file" | "path" | "markdown" | "clean", paths: string[]) => ipcRenderer.invoke("tandem:copy", kind, paths),
+  /** Native folder picker (adding a notebook); null if cancelled. */
+  chooseFolder: (): Promise<string | null> => ipcRenderer.invoke("tandem:choose-folder"),
 });
 
 // Native menu commands → the page (Workspace / Library listen for "tandem:command").

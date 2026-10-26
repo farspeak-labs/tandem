@@ -31,6 +31,7 @@ let tray: Tray | null = null;
 const waiting = new Map<string, number>();
 const pendingOpen: string[] = [];
 let libraryWindow: BrowserWindow | null = null;
+let notesWindow: BrowserWindow | null = null;
 /** Set once a quit starts, so a quit interrupted by a window closing late still finishes. */
 let quitting = false;
 
@@ -78,7 +79,7 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => {
   log("activate");
-  if (windows.size === 0 && !libraryWindow) showLibrary();
+  if (windows.size === 0 && !libraryWindow && !notesWindow) showLibrary();
 });
 
 app.on("before-quit", async (event) => {
@@ -235,7 +236,8 @@ app.whenReady().then(async () => {
   for (const p of pendingOpen.splice(0)) openPath(p);
   // Opened by hand (not by `tandem open`): show the Library once nothing else asked for a window.
   setTimeout(() => {
-    if (windows.size === 0 && !libraryWindow && process.env.TANDEM_BENCH !== "1") showLibrary();
+    if (process.env.TANDEM_OPEN_NOTES === "1") showNotes();
+    else if (windows.size === 0 && !libraryWindow && !notesWindow && process.env.TANDEM_BENCH !== "1") showLibrary();
   }, 1500);
 });
 
@@ -313,6 +315,57 @@ function showLibrary() {
   if (devUrl) void win.loadURL(`${devUrl}${devUrl.includes("?") ? "&" : "?"}view=library`);
   else void win.loadFile(join(__dirname, "../renderer/index.html"), { query: { view: "library" } });
 }
+
+/** The Notes window: search-or-create, the note list and the editor side by side. */
+function showNotes(then?: string) {
+  if (!service) return;
+  if (notesWindow && !notesWindow.isDestroyed()) {
+    notesWindow.show();
+    notesWindow.focus();
+    if (then) notesWindow.webContents.send("tandem:command", then);
+    return;
+  }
+  const win = new BrowserWindow({
+    width: 1320,
+    height: 860,
+    minWidth: 820,
+    minHeight: 480,
+    title: "Tandem Notes",
+    ...chrome(),
+    backgroundColor: windowBackground(),
+    show: false,
+    webPreferences: {
+      preload: join(__dirname, "preload.cjs"),
+      contextIsolation: true,
+      sandbox: true,
+      additionalArguments: [`--tandem=${JSON.stringify({ baseUrl: service.url, token: service.token, view: "notes", userName: userName(), home: homedir() })}`],
+    },
+  });
+  notesWindow = win;
+  win.on("closed", () => {
+    log("notes closed");
+    notesWindow = null;
+  });
+  win.once("ready-to-show", () => {
+    win.show();
+    if (then) win.webContents.send("tandem:command", then);
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+  const devUrl = process.env.TANDEM_RENDERER_URL;
+  if (devUrl) void win.loadURL(`${devUrl}${devUrl.includes("?") ? "&" : "?"}view=notes`);
+  else void win.loadFile(join(__dirname, "../renderer/index.html"), { query: { view: "notes" } });
+}
+
+ipcMain.handle("tandem:choose-folder", async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = win
+    ? await dialog.showOpenDialog(win, { properties: ["openDirectory", "createDirectory"], buttonLabel: "Use as Notebook" })
+    : await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"], buttonLabel: "Use as Notebook" });
+  return result.canceled ? null : (result.filePaths[0] ?? null);
+});
 
 function openPath(path: string) {
   if (!service) return;
@@ -488,6 +541,7 @@ function buildMenu() {
     {
       label: "File",
       submenu: [
+        { label: "New Note", accelerator: "CmdOrCtrl+N", click: () => showNotes("newNote") },
         { label: "Open…", accelerator: "CmdOrCtrl+O", click: () => void showOpenDialog() },
         ...(isMac ? [{ role: "recentDocuments", submenu: [{ role: "clearRecentDocuments" }] } as MenuItemConstructorOptions] : []),
         { type: "separator" },
@@ -562,6 +616,7 @@ function buildMenu() {
     {
       role: "windowMenu",
       submenu: [
+        { label: "Notes", accelerator: "CmdOrCtrl+Shift+N", click: () => showNotes() },
         { label: "Library", accelerator: "CmdOrCtrl+Shift+L", click: () => showLibrary() },
         { type: "separator" },
         { role: "minimize" },

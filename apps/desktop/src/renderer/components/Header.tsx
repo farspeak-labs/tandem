@@ -21,6 +21,8 @@ import { withKey } from "../lib/keys";
 import type { ViewKind } from "./Workspace";
 
 interface Props {
+  /** False for plain notes: no plan status or "Finish review" unless an agent is waiting or it's been reviewed. */
+  reviewChrome?: boolean;
   api: TandemApi;
   status: DocStatus;
   peers: UserInfo[];
@@ -66,6 +68,7 @@ function shortPath(path: string) {
 }
 
 export function Header(p: Props) {
+  const showReview = p.reviewChrome !== false || p.status.agentWaiting > 0 || (!!p.status.planStatus && p.status.planStatus !== "draft");
   // Brief confirmation shown in place of the path ("Copied path", "Copied file"…).
   const [flash, setFlash] = useState<string | null>(null);
   const info = p.status.info;
@@ -110,7 +113,7 @@ export function Header(p: Props) {
 
       <div className="titlebar__status">
         <SaveIndicator status={p.status} />
-        {p.status.planStatus && (
+        {p.status.planStatus && showReview && (
           <span title={STATUS_HINTS[p.status.planStatus] ?? ""}>
             <StatusBadge status={p.status.planStatus} />
           </span>
@@ -198,7 +201,7 @@ export function Header(p: Props) {
             },
           ]}
         />
-        <FinishReview api={p.api} status={p.status} openComments={p.openComments} openSuggestions={p.openSuggestions} />
+        {showReview && <FinishReview api={p.api} status={p.status} openComments={p.openComments} openSuggestions={p.openSuggestions} />}
       </div>
     </header>
   );

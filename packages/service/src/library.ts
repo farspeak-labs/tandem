@@ -21,6 +21,11 @@ export interface LibraryQuery {
   noRepo?: boolean;
   olderThanDays?: number;
   newerThanDays?: number;
+  /** Only files under this folder (a notebook). */
+  under?: string;
+  /** Default: pinned first, then most recently changed. */
+  sort?: "modified" | "created" | "title";
+  limit?: number;
 }
 
 export interface LibraryDoc extends DocRecord {
@@ -72,6 +77,11 @@ export class Library {
       params.push(query.folder, `${query.folder}/%`);
     }
     if (query.pinned) where.push("d.pinned = 1");
+    if (query.under) {
+      const dir = query.under.replace(/[\\/]+$/, "");
+      where.push("(substr(d.path, 1, ?) = ? OR substr(d.path, 1, ?) = ?)");
+      params.push(dir.length + 1, `${dir}/`, dir.length + 1, `${dir}\\`);
+    }
     if (query.noRepo) where.push("d.project IS NULL");
     if (query.olderThanDays) {
       where.push("d.updated_at < ?");
@@ -96,7 +106,9 @@ export class Library {
     }
     let sql = "SELECT d.* FROM docs d";
     if (where.length) sql += ` WHERE ${where.join(" AND ")}`;
-    sql += " ORDER BY d.pinned DESC, d.updated_at DESC LIMIT 500";
+    const order = query.sort === "title" ? "d.title COLLATE NOCASE ASC" : query.sort === "created" ? "d.opened_at DESC" : "d.updated_at DESC";
+    sql += ` ORDER BY d.pinned DESC, ${order} LIMIT ?`;
+    params.push(Math.max(1, Math.min(query.limit ?? 500, 20000)));
     const rows = this.db.prepare(sql).all(...params) as Record<string, string>[];
     return rows.map((row) => {
       const doc = this.store.getDoc(row.doc_id)!;

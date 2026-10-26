@@ -10,14 +10,20 @@ export type ServiceConnection = Omit<Connection, "docId">;
 
 declare global {
   interface Window {
-    tandem?: Partial<Connection> & { view?: string; platform?: string };
+    tandem?: Partial<Connection> & { view?: string; platform?: string; chooseFolder?: () => Promise<string | null> };
   }
 }
 
-/** Which window this renderer is: a document, or the Library (`view: "library"` / `?view=library`). */
-export function resolveView(): "doc" | "library" {
+/** Which window this renderer is: a document, the Library, or Notes (`view: …` / `?view=…`). */
+export function resolveView(): "doc" | "library" | "notes" {
   const v = window.tandem?.view ?? new URLSearchParams(window.location.search).get("view");
-  return v === "library" ? "library" : "doc";
+  return v === "library" ? "library" : v === "notes" ? "notes" : "doc";
+}
+
+/** The Notes window shows one document at a time; it sets which one here. */
+let activeDocId: string | null = null;
+export function setActiveDocId(docId: string | null) {
+  activeDocId = docId;
 }
 
 /** Like resolveConnection, but needs no docId. */
@@ -36,7 +42,7 @@ export function resolveConnection(): Connection | null {
   const q = new URLSearchParams(window.location.search);
   const baseUrl = (fromPreload.baseUrl ?? q.get("baseUrl") ?? "").replace(/\/$/, "");
   const token = fromPreload.token ?? q.get("token") ?? "";
-  const docId = fromPreload.docId ?? q.get("docId") ?? "";
+  const docId = activeDocId ?? fromPreload.docId ?? q.get("docId") ?? "";
   if (!baseUrl || !docId) return null;
   return { baseUrl, token, docId };
 }
