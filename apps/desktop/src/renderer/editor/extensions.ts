@@ -10,6 +10,7 @@ import { FindReplace } from "./find-replace";
 import { MermaidDiagrams } from "./mermaid";
 import { MmdRender } from "./mmd-render";
 import { ReviewChanges } from "./review-changes";
+import { WriteMode } from "./write-mode";
 import { SuggestMode, type SuggestModeOptions } from "./suggest-mode";
 import { TableCellGuard } from "./table-guard";
 
@@ -29,7 +30,7 @@ function caret(user: Record<string, string>): HTMLElement {
  * The editor's extension list: the shared schema from `@tandem/core` plus
  * UI-only behaviour. Nothing here may add nodes or marks.
  */
-export function editorExtensions(session: Session, suggest: Partial<SuggestModeOptions>): AnyExtension[] {
+export function editorExtensions(session: Session, suggest: Partial<SuggestModeOptions>, isWriting: () => boolean = () => false): AnyExtension[] {
   return [
     ...tandemExtensions(),
     Collaboration.configure({ document: session.ydoc, field: FRAGMENT }),
@@ -42,6 +43,7 @@ export function editorExtensions(session: Session, suggest: Partial<SuggestModeO
     FindReplace,
     MermaidDiagrams,
     MmdRender,
+    WriteMode.configure({ isWriting, getMode: suggest.getMode ?? (() => "edit") }),
     ReviewChanges.configure({
       reviewMaps: () => ({ comments: session.comments.toJSON(), suggestions: session.suggestions.toJSON() }),
     }),

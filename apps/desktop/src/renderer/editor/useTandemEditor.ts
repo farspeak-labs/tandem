@@ -6,7 +6,7 @@ import { allocateSuggestionId, linkSuggestion, pruneOrphans } from "./review-act
 import type { Mode } from "./suggest-mode";
 
 /** Creates the collaborative TipTap editor for a session. `modeRef` is read live by suggest mode. */
-export function useTandemEditor(session: Session, modeRef: RefObject<Mode>): Editor | null {
+export function useTandemEditor(session: Session, modeRef: RefObject<Mode>, writeRef?: RefObject<boolean>): Editor | null {
   const editorRef = useRef<Editor | null>(null);
   const editor = useEditor(
     {
@@ -17,7 +17,7 @@ export function useTandemEditor(session: Session, modeRef: RefObject<Mode>): Edi
         transact: (fn) => localTransact(session, fn),
         onTouched: (ids) => editorRef.current && pruneOrphans(editorRef.current, session, ids),
         link: (id, to) => linkSuggestion(session, id, to),
-      }),
+      }, () => writeRef?.current ?? false),
       editorProps: { attributes: { class: "tandem-prose" } },
       shouldRerenderOnTransaction: false,
     },

@@ -546,6 +546,7 @@ function buildMenu() {
       submenu: [
         { label: "Formatting Toolbar", accelerator: "CmdOrCtrl+Alt+T", click: () => command("toggleToolbar") },
         { label: "Outline", accelerator: "CmdOrCtrl+Shift+O", click: () => command("toggleOutline") },
+        { label: "Write Mode", accelerator: "CmdOrCtrl+Shift+W", click: () => command("toggleWrite") },
         { type: "separator" },
         { label: "Next Comment or Suggestion", accelerator: "CmdOrCtrl+Alt+Down", click: () => command("nextReview") },
         { label: "Previous Comment or Suggestion", accelerator: "CmdOrCtrl+Alt+Up", click: () => command("prevReview") },

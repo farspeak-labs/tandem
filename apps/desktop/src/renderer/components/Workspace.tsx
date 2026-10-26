@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { EditorContent, useEditorState } from "@tiptap/react";
 import { TextSelection } from "@tiptap/pm/state";
 import { yUndoPluginKey } from "@tiptap/y-tiptap";
@@ -24,6 +24,8 @@ import { FormatBubble } from "./FormatBubble";
 import { LinkPrompt } from "./LinkPrompt";
 import { MetadataCard } from "./MetadataCard";
 import { ChangesBanner } from "./ChangesBanner";
+import { WriteChrome } from "./WriteChrome";
+import { useWriteSettings } from "../lib/write-settings";
 import { Outline } from "./Outline";
 import { StatusLine } from "./StatusLine";
 import { Toolbar } from "./Toolbar";
@@ -52,6 +54,26 @@ export function Workspace({ session, api }: { session: Session; api: TandemApi }
   const modeRef = useRef<Mode>(mode);
   modeRef.current = mode;
   const [view, setView] = useState<ViewKind>("rich");
+  // Write mode: no chrome, plain edits, reading typography. Leaving it restores the previous mode.
+  const [write, setWrite] = useState(false);
+  const writeRef = useRef(write);
+  writeRef.current = write;
+  const modeBeforeWrite = useRef<Mode>("suggest");
+  const writeSettings = useWriteSettings();
+  const toggleWrite = useCallback(() => {
+    setWrite((on) => {
+      if (!on) {
+        modeBeforeWrite.current = modeRef.current;
+        setMode("edit");
+        setView("rich");
+        setHistoryOpen(false);
+      } else {
+        setMode(modeBeforeWrite.current);
+        if (document.fullscreenElement) void document.exitFullscreen();
+      }
+      return !on;
+    });
+  }, []);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [docDraft, setDocDraft] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
@@ -77,7 +99,7 @@ export function Workspace({ session, api }: { session: Session; api: TandemApi }
     if (status.info?.agentEdits) setAgentEdits(status.info.agentEdits);
   }, [status.info?.agentEdits]);
   const peers = usePeers(session);
-  const editor = useTandemEditor(session, modeRef);
+  const editor = useTandemEditor(session, modeRef, writeRef);
   const comments = useYMap(session.comments);
 
   const rawSuggestions =
@@ -211,6 +233,7 @@ export function Workspace({ session, api }: { session: Session; api: TandemApi }
       const cmd = (e as CustomEvent<string>).detail;
       if (cmd === "toggleToolbar") setToolbarOpen((v) => !v);
       else if (cmd === "toggleOutline") toggleOutline();
+      else if (cmd === "toggleWrite") toggleWrite();
       else if (cmd === "find") openFind(false);
       else if (cmd === "replace") openFind(true);
       else if (cmd === "nextReview") stepReview(1);
@@ -225,7 +248,7 @@ export function Workspace({ session, api }: { session: Session; api: TandemApi }
     };
     window.addEventListener("tandem:command", onCommand);
     return () => window.removeEventListener("tandem:command", onCommand);
-  }, [setToolbarOpen, toggleOutline, openFind, stepReview, editor]);
+  }, [setToolbarOpen, toggleOutline, toggleWrite, openFind, stepReview, editor]);
 
   // Highlight state lives outside the shared schema, so style it by id.
   const dynamicCss = useMemo(() => {
@@ -247,7 +270,11 @@ export function Workspace({ session, api }: { session: Session; api: TandemApi }
   const openComments = [...threads.values()].filter((t) => !t.resolved).length;
 
   return (
-    <div className={`app mode-${mode}`}>
+    <div
+      className={`app mode-${mode}${write ? ` is-write write-font-${writeSettings.font} write-width-${writeSettings.width}${writeSettings.focus ? " write-focus" : ""}${writeSettings.typewriter ? " write-typewriter" : ""}` : ""}`}
+      data-write-theme={write ? writeSettings.theme : undefined}
+      style={write ? ({ "--write-size": `${writeSettings.size}px` } as CSSProperties) : undefined}
+    >
       <style>{dynamicCss}</style>
       <Header
         api={api}
@@ -278,16 +305,17 @@ export function Workspace({ session, api }: { session: Session; api: TandemApi }
           setActiveId("__docdraft");
         }}
       />
-      {toolbarOpen && richActive && editor && <Toolbar editor={editor} mode={mode} onLink={() => mode === "edit" && setLinkOpen(true)} />}
+      {write && editor && <WriteChrome editor={editor} scroller={scrollerRef} onExit={toggleWrite} />}
+      {!write && toolbarOpen && richActive && editor && <Toolbar editor={editor} mode={mode} onLink={() => mode === "edit" && setLinkOpen(true)} />}
       {!status.synced && <div className="sync-banner">{status.connected ? "Loading document…" : "Connecting to Tandem…"}</div>}
       <div className="workspace">
-        {outlineOpen && richActive && editor && (
+        {!write && outlineOpen && richActive && editor && (
           <Outline editor={editor} scroller={scrollerRef} overlay={narrow} onClose={() => (narrow ? setOutlineOverlay(false) : setOutlinePref(false))} />
         )}
         <main className="scroller" ref={scrollerRef}>
           <div
             className={`page ${view === "source" && !historyOpen ? "is-hidden" : ""} ${historyOpen ? "is-history" : ""} ${
-              historyOpen || railNeeded ? "" : "no-rail"
+              !write && (historyOpen || railNeeded) ? "" : "no-rail"
             }`}
           >
             <article className="doc" hidden={historyOpen}>
@@ -331,7 +359,7 @@ export function Workspace({ session, api }: { session: Session; api: TandemApi }
         )}
       </div>
       {linkOpen && editor && richActive && <LinkPrompt editor={editor} onClose={() => setLinkOpen(false)} />}
-      {editor && (
+      {!write && editor && (
         <StatusLine
           editor={editor}
           api={api}
