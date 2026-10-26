@@ -3017,3 +3017,120 @@ button {
 .metadata-card__value {
   overflow-wrap: anywhere;
 }
+
+/* ---------------------------------------------------------------- changes since your review */
+
+.changes-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 1.4em;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  font: 13px/1.45 var(--font);
+  color: var(--text);
+}
+.changes-banner__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+.changes-banner__meta {
+  color: var(--text-2);
+}
+.changes-banner__note {
+  margin-top: 4px;
+  font-style: italic;
+}
+.changes-banner__link {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.changes-banner__actions {
+  display: flex;
+  gap: 4px;
+}
+.changes-banner__actions button {
+  min-width: 28px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-raised);
+  color: var(--text);
+  font: 12px var(--font);
+  cursor: pointer;
+}
+.tandem-prose .chg-added {
+  background: color-mix(in srgb, var(--ins-line) 22%, transparent);
+  border-radius: 2px;
+}
+.tandem-prose .chg-removed {
+  color: var(--del-text);
+  background: color-mix(in srgb, var(--del-line) 14%, transparent);
+  text-decoration: line-through;
+  text-decoration-color: var(--del-line);
+  border-radius: 2px;
+  user-select: none;
+}
+.tandem-prose .chg-block {
+  position: relative;
+}
+.tandem-prose .chg-block::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: -18px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.55;
+}
+.tandem-prose .chg-block--added {
+  background: color-mix(in srgb, var(--ins-line) 8%, transparent);
+  border-radius: 6px;
+}
+.tandem-prose .chg-block--added::before {
+  background: var(--ins-line);
+}
+.tandem-prose .chg-removed-block,
+.tandem-prose .chg-removed.is-long {
+  display: block;
+  margin: 0.6em 0;
+  color: var(--del-text);
+}
+.tandem-prose .chg-removed.is-long {
+  display: inline;
+}
+.tandem-prose .chg-removed__head {
+  padding: 2px 8px;
+  border: 1px dashed color-mix(in srgb, var(--del-line) 60%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--del-line) 8%, transparent);
+  color: var(--del-text);
+  font: 12.5px var(--font);
+  cursor: pointer;
+}
+.tandem-prose .chg-removed__body {
+  display: block;
+  margin-top: 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--del-line);
+  white-space: pre-wrap;
+  text-decoration: line-through;
+  text-decoration-color: var(--del-line);
+  opacity: 0.85;
+}
+.tandem-prose .chg-removed__body[hidden] {
+  display: none;
+}

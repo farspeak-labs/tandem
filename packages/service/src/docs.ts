@@ -38,6 +38,8 @@ export interface OpenOptions {
   folder?: string;
   /** Who is opening: CLI/agent opens record an "agent round" in history. */
   actor?: string;
+  /** The agent's one-line summary of what it changed (`tandem open --note`). */
+  note?: string;
   /** Bulk import: date new entries by the file's modification time, not now. */
   imported?: boolean;
 }
@@ -556,7 +558,7 @@ export class DocService {
     if (opts.actor) {
       // An agent handing the plan over for review: snapshot what it submitted.
       open.save();
-      const round = this.store.addRound({ docId, kind: "agent", actor: opts.actor, outcome: null, note: null, summary: null, content: open.markdown() });
+      const round = this.store.addRound({ docId, kind: "agent", actor: opts.actor, outcome: null, note: opts.note ?? null, summary: null, content: open.markdown() });
       if (round) {
         this.library.indexRound(docId, round.n, open.title(), open.markdown());
         this.emit({ type: "round.created", docId, n: round.n, kind: round.kind });

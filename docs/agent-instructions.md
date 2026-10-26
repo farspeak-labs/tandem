@@ -10,6 +10,7 @@ tandem open "/absolute/path/to/plan.md" --json
 
 - Run it **in the background** and continue when it exits; the wait never times out on its own and survives Tandem restarts. Don't kill it, and don't ask the user to type "done" in chat.
 - If the wait was interrupted, resume without losing the review: `tandem wait "/absolute/path/to/plan.md" --since <cursor> --json` (the cursor is printed by `open`).
+- Handing back after a review: add `--note "one line on what you changed"`. Tandem shows the reviewer what changed since their review, with your note on top.
 - Several plans at once: `tandem open a.md b.md` waits for every review.
 - Tag and classify on hand-over when it helps the user find it later: `--tags billing,infra --type plan` (types: plan, spec, design, handoff, research, notes).
 

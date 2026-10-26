@@ -119,6 +119,22 @@ describe("library", () => {
     expect((await get("file:///etc/hosts")).status).toBe(400);
   });
 
+  it("reports what changed since the last review, with the agent's note", async () => {
+    const { write, api } = await setup();
+    const a = write("plan.md", "# Plan\n\nFirst version.\n");
+    const { docId } = await api("/api/open", { method: "POST", body: JSON.stringify({ path: a, show: false, actor: "claude" }) });
+    expect(await api(`/api/docs/${docId}/changes`)).toEqual({ before: null, handoff: null, text: null });
+    await api(`/api/docs/${docId}/review`, { method: "POST", body: JSON.stringify({ outcome: "changes", actor: "Ryan" }) });
+    writeFileSync(a, "# Plan\n\nSecond version.\n");
+    await api("/api/open", { method: "POST", body: JSON.stringify({ path: a, show: false, actor: "claude", note: "Rewrote the intro." }) });
+    const c = await api(`/api/docs/${docId}/changes`);
+    expect(c.before).toMatchObject({ actor: "Ryan", outcome: "changes" });
+    expect(c.handoff).toMatchObject({ actor: "claude", note: "Rewrote the intro." });
+    expect(c.text).toBe("# Plan\n\nFirst version.\n");
+    await api(`/api/docs/${docId}/review`, { method: "POST", body: JSON.stringify({ outcome: "approve", actor: "Ryan" }) });
+    expect((await api(`/api/docs/${docId}/changes`)).before).toBeNull();
+  });
+
   it("finds text that only exists in a past round, and keeps an Inbox copy of temp-folder docs", async () => {
     const { home, api } = await setup();
     const tmpDoc = join(mkdtempSync(join(tmpdir(), "scratch-")), "draft.md");

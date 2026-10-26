@@ -121,6 +121,11 @@ export class TandemApi {
     return ((await (await this.request(`${this.doc}/rounds`)).json()) as { rounds: Round[] }).rounds;
   }
 
+  /** The reviewer's last review and the hand-back after it (nulls when there's nothing to compare). */
+  async changes(): Promise<ChangesInfo> {
+    return (await this.request(`${this.doc}/changes`)).json();
+  }
+
   async roundText(n: RoundRef): Promise<string> {
     return (await this.request(`${this.doc}/rounds/${n}`)).text();
   }
@@ -198,4 +203,10 @@ export async function readSse(body: ReadableStream<Uint8Array>, onEvent: (type: 
       onEvent(type, parsed);
     }
   }
+}
+
+export interface ChangesInfo {
+  before: { n: number; at: string; actor: string; outcome: string | null } | null;
+  handoff: { n: number; at: string; actor: string; note: string | null } | null;
+  text: string | null;
 }

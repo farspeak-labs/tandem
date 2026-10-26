@@ -23,6 +23,7 @@ import { FindBar } from "./FindBar";
 import { FormatBubble } from "./FormatBubble";
 import { LinkPrompt } from "./LinkPrompt";
 import { MetadataCard } from "./MetadataCard";
+import { ChangesBanner } from "./ChangesBanner";
 import { Outline } from "./Outline";
 import { StatusLine } from "./StatusLine";
 import { Toolbar } from "./Toolbar";
@@ -290,6 +291,7 @@ export function Workspace({ session, api }: { session: Session; api: TandemApi }
             }`}
           >
             <article className="doc" hidden={historyOpen}>
+              {editor && <ChangesBanner editor={editor} api={api} session={session} roundTick={status.roundTick} onThread={setActiveId} />}
               {editor && <MetadataCard session={session} onEdit={() => setView("source")} />}
               {editor && <EditorContent editor={editor} />}
               {editor && <FormatBubble editor={editor} session={session} mode={mode} onComment={newComment} />}

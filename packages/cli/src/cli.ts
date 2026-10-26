@@ -42,7 +42,7 @@ export function defaultDeps(): Deps {
 const HELP = `tandem — write and review Markdown plans with agents
 
 Usage:
-  tandem open <file.md> [more.md …] [--tags a,b] [--type plan] [--folder NAME] [--no-wait] [--json] [--timeout SECONDS]
+  tandem open <file.md> [more.md …] [--note "what changed"] [--tags a,b] [--type plan] [--folder NAME] [--no-wait] [--json] [--timeout SECONDS]
   tandem wait <file.md> [--since CURSOR] [--json] [--timeout SECONDS]
   tandem suggest <file.md> [--section HEADING] [--file NEW.md]     (new text from --file or stdin)
   tandem edit <file.md> [--section HEADING] [--file NEW.md]
@@ -183,6 +183,7 @@ async function openAndWait(deps: Deps, command: string, path: string, flags: Map
   if (typeof flags.get("tags") === "string") body.tags = String(flags.get("tags")).split(",").map((t) => t.trim()).filter(Boolean);
   if (typeof flags.get("type") === "string") body.type = flags.get("type");
   if (typeof flags.get("folder") === "string") body.folder = flags.get("folder");
+  if (typeof flags.get("note") === "string") body.note = flags.get("note");
 
   const startedAt = Date.now();
   let server = await ensureServer(deps);
@@ -265,7 +266,7 @@ async function readStdin(): Promise<string> {
 
 /** Positional words after `<command> <file>`, without flags and their values. */
 function positionalsAfter(rest: string[]): string[] {
-  const valued = new Set(["--section", "--file", "--on", "--tags", "--type", "--folder", "--timeout", "--since", "--from", "--to"]);
+  const valued = new Set(["--section", "--file", "--on", "--tags", "--type", "--folder", "--note", "--timeout", "--since", "--from", "--to"]);
   const out: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     if (valued.has(rest[i])) i++;

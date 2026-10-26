@@ -9,6 +9,7 @@ import { EditorKeys } from "./editor-keys";
 import { FindReplace } from "./find-replace";
 import { MermaidDiagrams } from "./mermaid";
 import { MmdRender } from "./mmd-render";
+import { ReviewChanges } from "./review-changes";
 import { SuggestMode, type SuggestModeOptions } from "./suggest-mode";
 import { TableCellGuard } from "./table-guard";
 
@@ -41,5 +42,8 @@ export function editorExtensions(session: Session, suggest: Partial<SuggestModeO
     FindReplace,
     MermaidDiagrams,
     MmdRender,
+    ReviewChanges.configure({
+      reviewMaps: () => ({ comments: session.comments.toJSON(), suggestions: session.suggestions.toJSON() }),
+    }),
   ];
 }

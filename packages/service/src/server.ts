@@ -86,6 +86,7 @@ export async function startService(opts: ServiceOptions = {}): Promise<RunningSe
         type: typeof body.type === "string" ? body.type : undefined,
         folder: typeof body.folder === "string" ? body.folder : undefined,
         actor: typeof body.actor === "string" ? body.actor : undefined,
+        note: typeof body.note === "string" && body.note.trim() ? body.note.trim() : undefined,
       });
       if (body.show !== false) opts.onShow?.(open.docId, open.path);
       return json(res, 200, { docId: open.docId, path: open.path, title: open.title(), cursor: docs.latestSequence() });
@@ -212,6 +213,19 @@ export async function startService(opts: ServiceOptions = {}): Promise<RunningSe
 
     if (method === "GET" && url.pathname === "/api/docs") {
       return json(res, 200, { docs: docs.store.listDocs() });
+    }
+
+    // What changed since the reviewer last finished a review: that review's text, and the hand-back after it.
+    if (parts[0] === "api" && parts[1] === "docs" && parts[2] && parts[3] === "changes" && method === "GET") {
+      const rounds = docs.store.rounds(parts[2]);
+      const review = rounds.filter((r) => r.kind === "review").at(-1);
+      const handoff = review ? rounds.filter((r) => r.kind === "agent" && r.n > review.n).at(-1) : undefined;
+      if (!review || !handoff) return json(res, 200, { before: null, handoff: null, text: null });
+      return json(res, 200, {
+        before: { n: review.n, at: review.createdAt, actor: review.actor, outcome: review.outcome },
+        handoff: { n: handoff.n, at: handoff.createdAt, actor: handoff.actor, note: handoff.note },
+        text: docs.store.getBlob(review.sha),
+      });
     }
 
     // History works for any doc Tandem has seen, open or not.

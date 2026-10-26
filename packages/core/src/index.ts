@@ -10,3 +10,4 @@ export * from "./export";
 export * from "./mmd";
 export * from "./files";
 export * from "./html";
+export * from "./review-diff";
