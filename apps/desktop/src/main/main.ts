@@ -445,7 +445,7 @@ async function exportFocused(format: "md" | "pdf") {
     writeFileSync(filePath, clean);
     return;
   }
-  const pdf = await renderPdf(open.title(), clean, { mermaidJs: join(__dirname, "mermaid.min.js"), tempDir: app.getPath("temp") });
+  const pdf = await renderPdf(open.title(), clean, { mermaidJs: join(__dirname, "mermaid.min.js"), tempDir: app.getPath("temp"), docPath: open.path });
   writeFileSync(filePath, pdf);
 }
 

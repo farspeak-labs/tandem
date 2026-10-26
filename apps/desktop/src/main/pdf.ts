@@ -2,14 +2,20 @@ import { createHash } from "node:crypto";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { BrowserWindow } from "electron";
-import { marked } from "marked";
+import katex from "katex";
+import { metadataEntries, mmdToHtml, splitFrontmatter } from "@tandem/core";
+import { docFile } from "@tandem/service";
 import { fitMermaid } from "../shared/mermaid-fit";
 
 /**
  * Prints a clean copy (Markdown, markup already removed) to a Letter PDF.
  * ```mermaid blocks are drawn as diagrams with the bundled Mermaid script.
  */
-export async function renderPdf(title: string, clean: string, paths: { mermaidJs: string; tempDir: string }): Promise<Buffer> {
+export async function renderPdf(
+  title: string,
+  clean: string,
+  paths: { mermaidJs: string; tempDir: string; docPath: string },
+): Promise<Buffer> {
   const diagrams = /^\s*(`{3,}|~{3,})\s*mermaid\s*$/im.test(clean);
   let head = "";
   if (diagrams) {
@@ -31,7 +37,16 @@ export async function renderPdf(title: string, clean: string, paths: { mermaidJs
   tr, pre, blockquote { break-inside: avoid; }
   .diagram { margin: 1em 0; text-align: center; break-inside: avoid; }
   .diagram svg { max-width: 100%; height: auto; }
-</style>${marked.parse(withFittedDiagrams(clean.replace(/^---\n[\s\S]*?\n---\n/, "")))}`;
+  caption { caption-side: bottom; padding-top: .4em; color: #555; font-size: 9.5pt; font-style: italic; }
+  .math-display { margin: 1em 0; text-align: center; }
+  dt { font-weight: 600; } dd { margin: 0 0 .5em 1.5em; }
+  abbr { text-decoration: underline dotted; }
+  .cite { color: #555; }
+  .toc ul { list-style: none; padding: 0; } .toc a { color: inherit; }
+  .footnotes { margin-top: 2em; font-size: 9.5pt; color: #333; } .fn-back { text-decoration: none; }
+  .included { margin: 1em 0; }
+  img { max-width: 100%; }
+</style>${body(clean, paths.docPath)}`;
   const printer = new BrowserWindow({ show: false, webPreferences: { sandbox: true, javascript: diagrams } });
   try {
     if (diagrams) {
@@ -69,3 +84,37 @@ export async function renderPdf(title: string, clean: string, paths: { mermaidJs
 function withFittedDiagrams(markdown: string): string {
   return markdown.replace(/^(\s*(`{3,}|~{3,})\s*mermaid\s*\n)([\s\S]*?)(\n\s*\2\s*$)/gim, (_m, open: string, _fence, code: string, close: string) => open + fitMermaid(code) + close);
 }
+
+/** The document as HTML: MultiMarkdown rendered, math as MathML, images and included files inlined. */
+function body(clean: string, docPath: string): string {
+  const { frontmatter, rest } = splitFrontmatter(clean);
+  const meta = metadataEntries(frontmatter);
+  const metaTitle = meta.find((e) => e.key.toLowerCase() === "title")?.value;
+  const html = renderMmd(withFittedDiagrams(rest), docPath, 0);
+  // MMD documents often carry their title only in metadata.
+  return metaTitle && !/^\s*<h1/.test(html) ? `<h1>${escapeHtml(metaTitle)}</h1>\n${html}` : html;
+}
+
+function renderMmd(markdown: string, docPath: string, depth: number): string {
+  return mmdToHtml(markdown, {
+    math: (tex, display) => katex.renderToString(tex, { displayMode: display, output: "mathml", throwOnError: false }),
+    imageSrc: (src) => dataUri(docPath, src),
+    transclude: (target) => {
+      if (depth >= 3) return null;
+      const found = docFile(docPath, target);
+      if ("error" in found || !/markdown/.test(found.type)) return null;
+      const text = splitFrontmatter(readFileSync(found.path, "utf8")).rest;
+      return `<div class="included">${renderMmd(text, found.path, depth + 1)}</div>`;
+    },
+  });
+}
+
+/** Local images become data URIs (the print page loads nothing else); remote ones stay as links. */
+function dataUri(docPath: string, src: string): string {
+  if (/^(?:https?:|data:)/i.test(src)) return src;
+  const found = docFile(docPath, src);
+  if ("error" in found || !found.type.startsWith("image/")) return src;
+  return `data:${found.type};base64,${readFileSync(found.path).toString("base64")}`;
+}
+
+const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");

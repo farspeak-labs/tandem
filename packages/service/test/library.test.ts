@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -95,6 +95,28 @@ describe("library", () => {
     await api(`/api/library/${docId}`, { method: "PATCH", body: JSON.stringify({ tags: ["latency"], type: "notes" }) });
     expect(readFileSync(a, "utf8")).toBe("Title: Order path notes\nAuthor: Ryan\nTags: latency\nType: notes\n\nNo heading here, the title comes from metadata.\n");
     expect((await api("/api/library?type=notes")).docs).toHaveLength(1);
+  });
+
+  it("serves images and included files from the document's folder only", async () => {
+    const { home, repo, write, api } = await setup();
+    const a = write("plan.md", "# Plan\n\n![chart](img/chart.png)\n");
+    mkdirSync(join(repo, "docs", "img"));
+    writeFileSync(join(repo, "docs", "img", "chart.png"), "PNG");
+    write("part.mmd", "Included text.\n");
+    writeFileSync(join(home, "secret.txt"), "nope");
+    symlinkSync(join(home, "secret.txt"), join(repo, "docs", "link.txt"));
+    const { docId } = await api("/api/open", { method: "POST", body: JSON.stringify({ path: a, show: false }) });
+    const get = (rel: string) => fetch(`${svc!.url}/api/docs/${docId}/file?path=${encodeURIComponent(rel)}&token=${svc!.token}`);
+    const img = await get("img/chart.png");
+    expect(img.status).toBe(200);
+    expect(img.headers.get("content-type")).toBe("image/png");
+    expect(await (await get("part.mmd")).text()).toBe("Included text.\n");
+    expect((await get("../../secret.txt")).status).toBe(403);
+    expect((await get("../secret.txt")).status).toBe(404);
+    expect((await get("link.txt")).status).toBe(403);
+    expect((await get("plan.md#x")).status).toBe(200);
+    expect((await get("/etc/hosts")).status).toBe(403);
+    expect((await get("file:///etc/hosts")).status).toBe(400);
   });
 
   it("finds text that only exists in a past round, and keeps an Inbox copy of temp-folder docs", async () => {

@@ -9,3 +9,4 @@ export * from "./sections";
 export * from "./export";
 export * from "./mmd";
 export * from "./files";
+export * from "./html";

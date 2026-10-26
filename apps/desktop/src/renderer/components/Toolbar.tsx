@@ -15,6 +15,8 @@ interface ToolbarState {
   bold: boolean;
   italic: boolean;
   strike: boolean;
+  sub: boolean;
+  sup: boolean;
   code: boolean;
   link: boolean;
   /** "p", "h1"…"h6", "code", or "" for anything else. */
@@ -66,6 +68,8 @@ function readState(e: Editor): ToolbarState {
     bold: e.isActive("bold"),
     italic: e.isActive("italic"),
     strike: e.isActive("strike"),
+    sub: e.isActive("subscript"),
+    sup: e.isActive("superscript"),
     code: e.isActive("code"),
     link: e.isActive("link"),
     style,
@@ -310,6 +314,12 @@ export function Toolbar({ editor, mode, onLink }: Props) {
       </Btn>
       <Btn title="Strikethrough" keys="Mod-Shift-x" active={s.strike} disabled={format} onRun={() => chain().toggleStrike().run()} className="is-strike">
         S
+      </Btn>
+      <Btn title="Subscript (H~2~O)" keys="Mod-," active={s.sub} disabled={format} onRun={() => chain().toggleMark("subscript").run()} className="is-script">
+        X<sub>2</sub>
+      </Btn>
+      <Btn title="Superscript (x^2^)" keys="Mod-." active={s.sup} disabled={format} onRun={() => chain().toggleMark("superscript").run()} className="is-script">
+        X<sup>2</sup>
       </Btn>
       <Btn title="Inline code" keys="Mod-e" active={s.code} disabled={format} onRun={() => chain().toggleCode().run()} className="is-code">
         {"</>"}

@@ -1,8 +1,8 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, extname, join, resolve as resolvePath, sep } from "node:path";
 import { WebSocketServer } from "ws";
 import { cleanCopy } from "@tandem/core";
 import { DocService, unifiedDiff, wordDiff, type ServiceEvent } from "./docs";
@@ -61,6 +61,7 @@ export async function startService(opts: ServiceOptions = {}): Promise<RunningSe
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Tandem-Actor");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Expose-Headers", "X-Tandem-Path");
     if (req.method === "OPTIONS") return void res.writeHead(204).end();
 
     try {
@@ -248,6 +249,16 @@ export async function startService(opts: ServiceOptions = {}): Promise<RunningSe
       });
     }
 
+    // Images and transcluded files next to a document, confined to the document's folder tree.
+    if (parts[0] === "api" && parts[1] === "docs" && parts[2] && parts[3] === "file" && method === "GET") {
+      const rec = docs.store.getDoc(parts[2]);
+      if (!rec) return json(res, 404, { error: "unknown document" });
+      const found = docFile(rec.path, url.searchParams.get("path") ?? "");
+      if ("error" in found) return json(res, found.status, { error: found.error });
+      res.writeHead(200, { "Content-Type": found.type, "Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff", "X-Tandem-Path": encodeURIComponent(found.path) });
+      return void res.end(readFileSync(found.path));
+    }
+
     if (parts[0] === "api" && parts[1] === "docs" && parts[2]) {
       const open = docs.get(parts[2]);
       if (!open) return json(res, 404, { error: "Document is not open" });
@@ -412,4 +423,27 @@ function readText(req: IncomingMessage): Promise<string> {
 async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
   const text = await readText(req);
   return text ? (JSON.parse(text) as Record<string, unknown>) : {};
+}
+
+const FILE_TYPES: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
+  avif: "image/avif", md: "text/markdown; charset=utf-8", mmd: "text/markdown; charset=utf-8", markdown: "text/markdown; charset=utf-8",
+  multimarkdown: "text/markdown; charset=utf-8", txt: "text/plain; charset=utf-8", csv: "text/csv; charset=utf-8",
+};
+
+/**
+ * Resolves `rel` against the document's folder. Only files inside that folder
+ * (after resolving symlinks), of known image/text types and up to 20 MB, are served.
+ */
+export function docFile(docPath: string, rel: string): { path: string; type: string } | { error: string; status: number } {
+  if (!rel || rel.includes("\0") || /^[a-z][\w+.-]*:/i.test(rel)) return { error: "bad path", status: 400 };
+  const root = realpathSync.native(dirname(docPath));
+  const target = resolvePath(root, decodeURIComponent(rel.split(/[?#]/)[0]));
+  if (!existsSync(target)) return { error: "not found", status: 404 };
+  const real = realpathSync.native(target);
+  if (real !== root && !real.startsWith(root + sep)) return { error: "outside the document's folder", status: 403 };
+  const type = FILE_TYPES[extname(real).slice(1).toLowerCase()];
+  if (!type) return { error: "unsupported file type", status: 415 };
+  if (statSync(real).size > 20 * 1024 * 1024) return { error: "too large", status: 413 };
+  return { path: real, type };
 }

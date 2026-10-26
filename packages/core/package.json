@@ -6,7 +6,9 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./schema": "./src/schema.ts"
+    "./schema": "./src/schema.ts",
+    "./mmd": "./src/mmd.ts",
+    "./html": "./src/html.ts"
   },
   "dependencies": {
     "@tandem/rfm": "workspace:*",

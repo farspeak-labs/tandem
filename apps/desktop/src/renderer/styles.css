@@ -2783,3 +2783,237 @@ button {
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
+
+/* ---------------------------------------------------------------- MultiMarkdown */
+
+.tandem-prose .mmd-hidden {
+  display: none;
+}
+.tandem-prose .mmd-source {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--doc-code-bg);
+  color: var(--doc-code-text);
+  border-radius: 4px;
+  padding: 0 2px;
+}
+.tandem-prose .mmd-math {
+  cursor: text;
+}
+.tandem-prose .mmd-math .katex {
+  font-size: 1.05em;
+}
+.tandem-prose pre.math-source.is-collapsed {
+  display: none;
+}
+.tandem-prose pre.math-source:not(.is-collapsed) {
+  margin-bottom: 0.4em;
+}
+.tandem-prose .mmd-math-block {
+  margin: 1em 0;
+  padding: 6px 0;
+  text-align: center;
+  overflow-x: auto;
+  cursor: text;
+}
+.tandem-prose .mmd-fn-ref {
+  margin-left: 1px;
+  padding: 0 2px;
+  color: var(--doc-link);
+  font-size: 0.72em;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tandem-prose .mmd-fn-ref.is-missing {
+  color: var(--del-line);
+}
+.tandem-prose .mmd-xref {
+  color: var(--doc-link);
+  text-decoration: underline;
+  text-decoration-color: var(--doc-link-line);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.tandem-prose .mmd-cite {
+  color: var(--doc-muted);
+  cursor: text;
+}
+.tandem-prose .mmd-abbr {
+  text-decoration: underline dotted;
+  text-decoration-color: var(--doc-muted);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+.tandem-prose .mmd-label {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--doc-sunken);
+  color: var(--doc-muted);
+  font-size: 0.55em;
+  font-weight: 500;
+  vertical-align: middle;
+  cursor: text;
+}
+.tandem-prose img.mmd-image {
+  display: inline-block;
+  max-width: 100%;
+  margin: 0 2px;
+  border-radius: 4px;
+  vertical-align: middle;
+  cursor: text;
+}
+.tandem-prose .mmd-transclude-inline {
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--doc-sunken);
+  color: var(--doc-muted);
+  font-size: 0.9em;
+}
+.tandem-prose .mmd-caption {
+  margin: -0.6em 0 1.35em;
+  color: var(--doc-muted);
+  font-size: 0.88em;
+  font-style: italic;
+  text-align: center;
+}
+.tandem-prose .mmd-note-def {
+  position: relative;
+  margin: 0.4em 0;
+  padding-left: 2em;
+  color: var(--doc-muted);
+  font-size: 0.92em;
+}
+.tandem-prose .mmd-note-def::before {
+  content: attr(data-n) ".";
+  position: absolute;
+  left: 0;
+  width: 1.6em;
+  text-align: right;
+  font-weight: 600;
+  user-select: none;
+}
+.tandem-prose .mmd-note-abbr::before,
+.tandem-prose .mmd-note-glossary::before {
+  content: attr(data-n);
+  position: static;
+  margin-right: 0.6em;
+  color: var(--doc-text);
+  text-align: left;
+}
+.tandem-prose .mmd-note-abbr,
+.tandem-prose .mmd-note-glossary {
+  padding-left: 0;
+}
+.tandem-prose .mmd-dl {
+  margin: 1em 0;
+}
+.tandem-prose .mmd-dl dt {
+  font-weight: 600;
+  color: var(--doc-heading);
+}
+.tandem-prose .mmd-dl dd {
+  margin: 0.15em 0 0.5em 1.5em;
+}
+.tandem-prose .mmd-directive.is-rendered {
+  display: none;
+}
+.tandem-prose .mmd-directive.ProseMirror-selectednode,
+.tandem-prose .mmd-directive:not(.is-rendered) {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.85em;
+  color: var(--doc-muted);
+}
+.tandem-prose .mmd-toc,
+.tandem-prose .mmd-include {
+  margin: 1.2em 0;
+  padding: 12px 16px;
+  border: 1px solid var(--doc-border);
+  border-radius: 12px;
+  background: var(--doc-sunken);
+}
+.tandem-prose .mmd-toc__title,
+.tandem-prose .mmd-include__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--doc-muted);
+  font-size: 0.75em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.tandem-prose .mmd-include__name {
+  flex: 1;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.tandem-prose .mmd-toc a {
+  display: block;
+  padding: 2px 0;
+  color: var(--doc-link);
+  cursor: pointer;
+}
+.tandem-prose .mmd-chip-btn {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-raised);
+  color: var(--text-2);
+  font: 11px var(--font);
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+.tandem-prose .mmd-include__bar .mmd-chip-btn + .mmd-chip-btn {
+  margin-left: 0;
+}
+.tandem-prose .mmd-include__body {
+  min-height: 0;
+  font-size: 0.95em;
+}
+.tandem-prose .mmd-include__body > :first-child {
+  margin-top: 0;
+}
+.tandem-prose .mmd-include__body > :last-child {
+  margin-bottom: 0;
+}
+.tandem-prose .mmd-include.is-error .mmd-include__body {
+  color: var(--doc-muted);
+  font-style: italic;
+}
+.tandem-prose .mmd-muted {
+  color: var(--doc-muted);
+}
+
+.metadata-card {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  width: 100%;
+  margin: 0 0 1.6em;
+  padding: 12px 16px;
+  border: 1px solid var(--doc-border);
+  border-radius: 12px;
+  background: var(--doc-sunken);
+  color: var(--doc-text);
+  font: 13px/1.5 var(--font);
+  text-align: left;
+  cursor: pointer;
+}
+.metadata-card:hover {
+  border-color: var(--border-strong);
+}
+.metadata-card__row {
+  display: contents;
+}
+.metadata-card__key {
+  color: var(--doc-muted);
+  font-weight: 500;
+}
+.metadata-card__value {
+  overflow-wrap: anywhere;
+}

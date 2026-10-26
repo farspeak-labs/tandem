@@ -13,6 +13,7 @@ Plans stay plain Markdown files in your repos. Review feedback is stored in the 
 - **Plan history.** Every hand-off and review is a round with word-level diffs and restore. When a plan is approved, intermediate rounds are pruned.
 - **Library.** Every plan Tandem has seen, by project, type and tags (from frontmatter), with folders, smart folders, pins, archive and full-text search across past rounds.
 - **Mermaid diagrams.** ` ```mermaid ` blocks render as diagrams; click one to edit its code, and PDF export draws them too.
+- **MultiMarkdown.** Opens `.md`, `.mmd` and `.multimarkdown` files and renders MMD 6: metadata, footnotes, math (`$…$`, `$$…$$`, `\\(…\\)`), definition lists, tables with merged cells and captions, sub/superscript, cross-references, citations, abbreviations, `{{TOC}}` and `{{file}}` includes. Click any of them to edit the source; editing never changes MMD syntax you didn't touch.
 - **Clean export.** Suggestions accepted and review markup removed, as Markdown or PDF.
 
 ## Install

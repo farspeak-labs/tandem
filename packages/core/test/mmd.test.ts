@@ -181,3 +181,25 @@ describe("MMD metadata", () => {
 function collect(n: JSONNode): JSONNode[] {
   return [n, ...(n.content ?? []).flatMap(collect)];
 }
+
+describe("MMD → HTML", async () => {
+  const { mmdToHtml } = await import("../src/html");
+  it("renders footnotes, math, tables, deflists, TOC, cross-refs and sub/superscript", () => {
+    const html = mmdToHtml(CANONICAL.replace(/^[\s\S]*?\n\n/, ""), { math: (t, d) => `<m d="${d}">${t}</m>`, transclude: (t) => `<div class="inc">${t}</div>` });
+    expect(html).toContain('<sup class="fn-ref" id="fnref-lat"><a href="#fn-lat">1</a></sup>');
+    expect(html).toContain('<li id="fn-lat">Measured on the <strong>Dublin</strong> node.');
+    expect(html).toContain('H<sub>2</sub>O and x<sup>2</sup>');
+    expect(html).toContain('<a href="#results">Results</a>');
+    expect(html).toContain('<h3 id="results">Results</h3>');
+    expect(html).toContain('<abbr title="MultiMarkdown">MMD</abbr>');
+    expect(html).toContain('<m d="false">E = mc^2</m>');
+    expect(html).toContain('<div class="math-display"><m d="true">x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}</m></div>');
+    expect(html).toContain("<caption>Prototype table</caption>");
+    expect(html).toContain('<th colspan="2" style="text-align:center">Grouping</th>');
+    expect(html).toContain('<td colspan="2" style="text-align:center"><em>Long cell</em></td>');
+    expect(html).toContain("<dl><dt>Term</dt><dd>A definition of the term.</dd><dd>A second definition.</dd></dl>");
+    expect(html).toContain('<nav class="toc"><ul><li style="margin-left:0em"><a href="#overview">Overview</a></li>');
+    expect(html).toContain('<div class="inc">other-file.md</div>');
+    expect(html).toContain('style="width:400px;height:300px"');
+  });
+});

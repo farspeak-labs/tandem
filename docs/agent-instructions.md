@@ -39,3 +39,5 @@ tandem export plan.md --out plan.clean.md                    # clean copy: sugge
 
 Set `TANDEM_ACTOR` (e.g. `claude`) so your edits and hand-overs are attributed in the reviewer's history.
 Plain edits to the file with your normal tools also work: Tandem merges them into the open document without losing the reviewer's unsaved work.
+
+Tandem also opens `.mmd` / `.multimarkdown` files and renders MultiMarkdown: metadata (`Title:` … at the top), footnotes `[^id]`, math `$…$` / `$$…$$`, definition lists, tables with `||` spans and `[captions]`, `H~2~O` / `x^2^`, cross-references `[Heading][]`, `{{TOC}}` and `{{file}}`. Write them as plain text; Tandem keeps them byte-for-byte. A single `~` means subscript, so write strikethrough as `~~text~~`.

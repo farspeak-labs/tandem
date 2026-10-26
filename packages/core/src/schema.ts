@@ -80,7 +80,7 @@ export const MmdRefMark = Mark.create({
     return [{ tag: "span[data-mmd]" }];
   },
   renderHTML({ mark }) {
-    return ["span", { "data-mmd": mark.attrs.kind, "data-label": mark.attrs.label, class: `mmd-ref mmd-${mark.attrs.kind}` }, 0];
+    return ["span", { "data-mmd": mark.attrs.kind, "data-label": mark.attrs.label, class: `mmd-ref mmd-ref--${mark.attrs.kind}` }, 0];
   },
 });
 

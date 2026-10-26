@@ -1,4 +1,5 @@
 import type { Token, Tokens, TokenizerExtension, TokenizerThis } from "marked";
+import { parse as parseYaml } from "yaml";
 
 /**
  * MultiMarkdown (MMD 6) syntax as marked tokenizer extensions.
@@ -452,3 +453,22 @@ export function setMmdMetadata(block: string, key: string, value: string | null)
   const text = lines.filter((l, i) => l !== "" || i < lines.length - 1).join("\n");
   return text ? `${text}\n` : "";
 }
+
+/** Key/value pairs of YAML frontmatter or an MMD metadata block, for display. */
+export function metadataEntries(frontmatter: string): Array<{ key: string; value: string }> {
+  if (!frontmatter) return [];
+  if (isMmdMetadata(frontmatter)) return parseMmdMetadata(frontmatter);
+  try {
+    const data = parseYaml(frontmatter.replace(/^---[ \t]*\r?\n/, "").replace(/\r?\n---[ \t]*(?:\r?\n)?$/, ""), { logLevel: "silent" });
+    if (!data || typeof data !== "object" || Array.isArray(data)) return [];
+    return Object.entries(data as Record<string, unknown>).map(([key, v]) => ({
+      key,
+      value: Array.isArray(v) ? v.map(String).join(", ") : v !== null && typeof v === "object" ? JSON.stringify(v) : String(v ?? ""),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** MMD's automatic heading id: lower case, letters and digits only. */
+export const mmdSlug = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");

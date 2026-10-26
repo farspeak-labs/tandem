@@ -53,6 +53,8 @@ export const EditorKeys = Extension.create<EditorKeysOptions>({
     const keys: Record<string, () => boolean> = {
       // Suggest mode would otherwise read ⌘⇧X as ⌘X (cut as a tracked deletion).
       "Mod-Shift-x": () => (mode() === "edit" ? this.editor.commands.toggleStrike() : true),
+      "Mod-,": () => (mode() === "edit" ? this.editor.commands.toggleMark("subscript") : true),
+      "Mod-.": () => (mode() === "edit" ? this.editor.commands.toggleMark("superscript") : true),
       "Mod-z": swallowInView,
       "Shift-Mod-z": swallowInView,
       "Mod-y": swallowInView,

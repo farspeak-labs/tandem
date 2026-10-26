@@ -19,11 +19,13 @@ export interface HeadingNode extends HeadingItem {
   children: HeadingNode[];
 }
 
-/** Visible text of a textblock (pending deletions left out). */
+/** Visible text of a textblock (pending deletions and MMD heading labels left out). */
 export function visibleText(block: PMNode): string {
   let out = "";
   block.forEach((child) => {
-    if (child.isText && !child.marks.some((m) => GONE_MARKS.includes(m.type.name))) out += child.text;
+    if (!child.isText) return;
+    if (child.marks.some((m) => GONE_MARKS.includes(m.type.name) || (m.type.name === "mmdRef" && m.attrs.kind === "label"))) return;
+    out += child.text;
   });
   return out;
 }
