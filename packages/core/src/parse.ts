@@ -1,5 +1,16 @@
 import { Marked, type Token, type Tokens, type TokenizerExtension } from "marked";
 import { parse as parseYaml } from "yaml";
+import {
+  mmdExtensions,
+  type MmdDefListToken,
+  type MmdDirectiveToken,
+  type MmdMathBlockToken,
+  type MmdMathToken,
+  type MmdNoteDefToken,
+  type MmdRefToken,
+  type MmdScriptToken,
+  type MmdTableToken,
+} from "./mmd";
 import { segment, type Segments } from "./segments";
 import { rowKey } from "./serialize";
 import { signature } from "./signature";
@@ -119,7 +130,7 @@ const criticExtension: TokenizerExtension = {
 };
 
 const md = new Marked({ gfm: true });
-md.use({ extensions: [criticExtension] });
+md.use({ extensions: [criticExtension, ...mmdExtensions] });
 
 // ---------------------------------------------------------------- conversion
 
@@ -193,11 +204,25 @@ class Converter {
       case "html":
         return /^<br\s*\/?>$/i.test(token.raw.trim()) ? [{ type: "hardBreak" }] : this.text(token.raw, marks);
       case "image": {
-        // Inline images stay as their Markdown text; image-only paragraphs become image blocks.
-        return this.text(token.raw, marks);
+        // Inline images keep their exact Markdown; image-only paragraphs become image blocks.
+        const t = token as Tokens.Image;
+        return [rawInline(t.raw, "image", t.href, marks)];
       }
       case "critic":
         return this.critic(token as unknown as CriticToken, marks);
+      case "mmdRef": {
+        const t = token as unknown as MmdRefToken;
+        return [rawInline(t.raw, t.kind, t.label, marks)];
+      }
+      case "mmdSub":
+      case "mmdSup": {
+        const t = token as unknown as MmdScriptToken;
+        return this.inline(t.tokens, [...marks, { type: t.type === "mmdSub" ? "subscript" : "superscript" }]);
+      }
+      case "mmdMath": {
+        const t = token as unknown as MmdMathToken;
+        return this.text(t.tex, [...marks, { type: "math", attrs: { delim: t.delim } }]);
+      }
       default:
         return this.text(token.raw, marks);
     }
@@ -244,7 +269,11 @@ class Converter {
       }
       case "heading": {
         const t = token as Tokens.Heading;
-        return { type: "heading", attrs: { level: t.depth }, content: this.inline(t.tokens) };
+        const content = this.inline(t.tokens);
+        // MMD heading label: `## Results [results]` (a shortcut reference at the end).
+        const ref = content.at(-1)?.marks?.find((m) => m.type === "mmdRef");
+        if (ref?.attrs?.kind === "ref" && /^\[[^\]]+\]$/.test(String(content.at(-1)!.text))) ref.attrs = { ...ref.attrs, kind: "label" };
+        return { type: "heading", attrs: { level: t.depth }, content };
       }
       case "blockquote": {
         const t = token as Tokens.Blockquote;
@@ -264,6 +293,28 @@ class Converter {
         return { type: "horizontalRule" };
       case "table":
         return this.table(token as Tokens.Table);
+      case "mmdTable":
+        return this.mmdTable(token as unknown as MmdTableToken);
+      case "mmdMathBlock": {
+        const t = token as unknown as MmdMathBlockToken;
+        return { type: "mathBlock", attrs: { delim: t.delim, oneLine: t.oneLine }, content: t.tex ? [{ type: "text", text: t.tex }] : [] };
+      }
+      case "mmdNoteDef": {
+        const t = token as unknown as MmdNoteDefToken;
+        return { type: "noteDef", attrs: { kind: t.kind, label: t.label }, content: this.inline(t.tokens) };
+      }
+      case "mmdDefList": {
+        const t = token as unknown as MmdDefListToken;
+        return {
+          type: "definitionList",
+          content: t.items.map((i) => ({ type: i.kind === "term" ? "definitionTerm" : "definitionDesc", content: this.inline(i.tokens) })),
+        };
+      }
+      case "mmdToc":
+      case "mmdTransclusion": {
+        const t = token as unknown as MmdDirectiveToken;
+        return { type: "mmdDirective", attrs: { kind: t.type === "mmdToc" ? "toc" : "transclusion", target: t.target, raw: t.raw.replace(/\s+$/, "") } };
+      }
       default:
         return null;
     }
@@ -307,21 +358,45 @@ class Converter {
     return { type: "bulletList", content: items };
   }
 
+  /** GFM cells are one line; `<br>` separates the lines, which the editor holds as paragraphs. */
+  private cell(type: string, tokens: Token[], attrs: Record<string, unknown>): JSONNode {
+    const lines: JSONNode[][] = [[]];
+    for (const n of this.inline(tokens)) {
+      if (n.type === "hardBreak") lines.push([]);
+      else lines.at(-1)!.push(n);
+    }
+    return { type, attrs, content: lines.map((l) => (l.length ? { type: "paragraph", content: l } : { type: "paragraph" })) };
+  }
+
   private table(t: Tokens.Table): JSONNode {
-    // GFM cells are one line; `<br>` separates the lines, which the editor holds as paragraphs.
-    const cell = (type: string, c: Tokens.TableCell): JSONNode => {
-      const lines: JSONNode[][] = [[]];
-      for (const n of this.inline(c.tokens)) {
-        if (n.type === "hardBreak") lines.push([]);
-        else lines.at(-1)!.push(n);
-      }
-      return { type, content: lines.map((l) => (l.length ? { type: "paragraph", content: l } : { type: "paragraph" })) };
-    };
+    const align = (i: number) => ({ align: t.align[i] ?? null });
     const rows: JSONNode[] = [
-      { type: "tableRow", content: t.header.map((c) => cell("tableHeader", c)) },
-      ...t.rows.map((r) => ({ type: "tableRow", content: r.map((c) => cell("tableCell", c)) })),
+      { type: "tableRow", content: t.header.map((c, i) => this.cell("tableHeader", c.tokens, align(i))) },
+      ...t.rows.map((r) => ({ type: "tableRow", content: r.map((c, i) => this.cell("tableCell", c.tokens, align(i))) })),
     ];
     return { type: "table", content: rows };
+  }
+
+  /** MMD table: several header rows, `||` column spans, a caption. Rows are padded to full width. */
+  private mmdTable(t: MmdTableToken): JSONNode {
+    const width = Math.max(t.aligns.length, ...[...t.header, ...t.rows].map((r) => r.reduce((n, c) => n + c.colspan, 0)));
+    const row = (cells: MmdTableToken["rows"][number], type: string): JSONNode => {
+      const content: JSONNode[] = [];
+      let col = 0;
+      for (const c of cells) {
+        const attrs: Record<string, unknown> = { align: t.aligns[col] ?? null };
+        if (c.colspan > 1) attrs.colspan = c.colspan;
+        content.push(this.cell(type, c.tokens, attrs));
+        col += c.colspan;
+      }
+      for (; col < width; col++) content.push(this.cell(type, [], { align: t.aligns[col] ?? null }));
+      return { type: "tableRow", content };
+    };
+    return {
+      type: "table",
+      attrs: { caption: t.caption, captionRaw: t.captionRaw, captionBefore: t.captionBefore },
+      content: [...t.header.map((r) => row(r, "tableHeader")), ...t.rows.map((r) => row(r, "tableCell"))],
+    };
   }
 }
 
@@ -364,6 +439,11 @@ function decodeEntities(text: string): string {
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&");
+}
+
+/** An MMD reference: its exact source as text, under an `mmdRef` mark. */
+function rawInline(raw: string, kind: string, label: string, marks: JSONMark[]): JSONNode {
+  return { type: "text", text: raw, marks: [...marks, { type: "mmdRef", attrs: { kind, label } }] };
 }
 
 function rawBlock(raw: string): JSONNode {
@@ -409,14 +489,32 @@ export function convertBlock(raw: string, conv: Converter): JSONNode {
   return node;
 }
 
-/** Per-row keys and source lines of a GFM table, for row-level preservation on save. */
-export function originalTableRows(src: string): { lines: string[]; rows: string[]; width: number } | null {
+/** Per-row keys and source lines of a pipe table (GFM or MMD), for row-level preservation on save. */
+export function originalTableRows(src: string): OriginalTable | null {
   if (!src) return null;
   const node = convertBlock(`${src}\n`, newConverter(""));
   if (node.type !== "table") return null;
   const lines = src.split("\n");
+  const caption = typeof node.attrs?.captionRaw === "string" ? lines.indexOf(node.attrs.captionRaw) : -1;
+  const sepIndex = lines.findIndex((l, i) => i !== caption && /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/.test(l));
+  if (sepIndex < 0) return null;
+  const rowLines = lines.filter((_l, i) => i !== caption && i !== sepIndex);
   const rows = (node.content ?? []).map((r) => rowKey(r));
-  return { lines, rows, width: node.content?.[0]?.content?.length ?? 0 };
+  if (rowLines.length !== rows.length) return null;
+  return { rowLines, separator: lines[sepIndex], rows, width: tableWidth(node) };
+}
+
+export interface OriginalTable {
+  /** Source line of each row, in order (caption and separator excluded). */
+  rowLines: string[];
+  separator: string;
+  rows: string[];
+  width: number;
+}
+
+/** Columns in a table node, counting spans. */
+export function tableWidth(node: JSONNode): number {
+  return Math.max(0, ...(node.content ?? []).map((r) => (r.content ?? []).reduce((n, c) => n + Number(c.attrs?.colspan ?? 1), 0)));
 }
 
 export function newConverter(endmatter: string): Converter {

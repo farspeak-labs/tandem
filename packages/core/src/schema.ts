@@ -19,6 +19,10 @@ export const BLOCK_TYPES = [
   "table",
   "image",
   "rawBlock",
+  "mathBlock",
+  "noteDef",
+  "definitionList",
+  "mmdDirective",
 ];
 
 /**
@@ -54,6 +58,179 @@ export const RawBlock = Node.create({
   },
   renderHTML({ node }) {
     return ["div", { "data-raw-block": "", class: "raw-block" }, ["pre", {}, node.attrs.text]];
+  },
+});
+
+// ---------------------------------------------------------------- MultiMarkdown
+
+/**
+ * An MMD reference kept as its exact source text: footnote/citation/glossary/
+ * abbreviation references, cross-references, heading labels, images with
+ * attributes, inline transclusion. The marked text is written back verbatim;
+ * the editor shows it rendered until the caret moves into it.
+ */
+export const MmdRefMark = Mark.create({
+  name: "mmdRef",
+  inclusive: false,
+  excludes: "mmdRef code math link subscript superscript",
+  addAttributes() {
+    return { kind: { default: "ref" }, label: { default: "" } };
+  },
+  parseHTML() {
+    return [{ tag: "span[data-mmd]" }];
+  },
+  renderHTML({ mark }) {
+    return ["span", { "data-mmd": mark.attrs.kind, "data-label": mark.attrs.label, class: `mmd-ref mmd-${mark.attrs.kind}` }, 0];
+  },
+});
+
+/** Display math: `$$…$$` or `\\[…\\]`. The TeX is the node's text. */
+export const MathBlock = Node.create({
+  name: "mathBlock",
+  group: "block",
+  content: "text*",
+  marks: "",
+  code: true,
+  defining: true,
+  addAttributes() {
+    return { delim: { default: "$$" }, oneLine: { default: false } };
+  },
+  parseHTML() {
+    return [{ tag: "pre[data-math]", preserveWhitespace: "full" }];
+  },
+  renderHTML() {
+    return ["pre", { "data-math": "", class: "math-source" }, ["code", {}, 0]];
+  },
+});
+
+/** `[^id]: text` (footnote), `[?term]: text` (glossary) or `*[ABBR]: expansion`. */
+export const NoteDef = Node.create({
+  name: "noteDef",
+  group: "block",
+  content: "inline*",
+  defining: true,
+  addAttributes() {
+    return { kind: { default: "footnote" }, label: { default: "" } };
+  },
+  parseHTML() {
+    return [{ tag: "div[data-note-def]" }];
+  },
+  renderHTML({ node }) {
+    return ["div", { "data-note-def": node.attrs.kind, "data-label": node.attrs.label, class: `mmd-note-def mmd-note-${node.attrs.kind}` }, 0];
+  },
+});
+
+export const DefinitionList = Node.create({
+  name: "definitionList",
+  group: "block",
+  content: "(definitionTerm | definitionDesc)+",
+  parseHTML() {
+    return [{ tag: "dl" }];
+  },
+  renderHTML() {
+    return ["dl", { class: "mmd-dl" }, 0];
+  },
+});
+export const DefinitionTerm = Node.create({
+  name: "definitionTerm",
+  content: "inline*",
+  defining: true,
+  parseHTML() {
+    return [{ tag: "dt" }];
+  },
+  renderHTML() {
+    return ["dt", {}, 0];
+  },
+});
+export const DefinitionDesc = Node.create({
+  name: "definitionDesc",
+  content: "inline*",
+  defining: true,
+  parseHTML() {
+    return [{ tag: "dd" }];
+  },
+  renderHTML() {
+    return ["dd", {}, 0];
+  },
+});
+
+/** `{{TOC}}` or `{{file}}` on a line of its own. */
+export const MmdDirective = Node.create({
+  name: "mmdDirective",
+  group: "block",
+  atom: true,
+  selectable: true,
+  addAttributes() {
+    return { kind: { default: "transclusion" }, target: { default: "" }, raw: { default: "" } };
+  },
+  parseHTML() {
+    return [{ tag: "div[data-mmd-directive]" }];
+  },
+  renderHTML({ node }) {
+    return ["div", { "data-mmd-directive": node.attrs.kind, class: `mmd-directive mmd-${node.attrs.kind}` }, node.attrs.raw];
+  },
+});
+
+/** Inline math: `$…$` or `\\(…\\)`. Like code, it holds no formatting. */
+export const MathMark = Mark.create({
+  name: "math",
+  inclusive: false,
+  excludes: "bold italic strike link code subscript superscript mmdRef",
+  addAttributes() {
+    return { delim: { default: "$" } };
+  },
+  parseHTML() {
+    return [{ tag: "span[data-math]" }];
+  },
+  renderHTML() {
+    return ["span", { "data-math": "", class: "math-inline" }, 0];
+  },
+});
+export const SubscriptMark = Mark.create({
+  name: "subscript",
+  excludes: "superscript",
+  parseHTML() {
+    return [{ tag: "sub" }];
+  },
+  renderHTML() {
+    return ["sub", {}, 0];
+  },
+});
+export const SuperscriptMark = Mark.create({
+  name: "superscript",
+  excludes: "subscript",
+  parseHTML() {
+    return [{ tag: "sup" }];
+  },
+  renderHTML() {
+    return ["sup", {}, 0];
+  },
+});
+
+/** Column alignment on cells (from `:---:` separators) and an MMD caption on tables. */
+export const TableAttributes = Extension.create({
+  name: "tableAttributes",
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["tableCell", "tableHeader"],
+        attributes: {
+          align: {
+            default: null,
+            parseHTML: (el) => el.style.textAlign || null,
+            renderHTML: (attrs) => (attrs.align ? { style: `text-align: ${attrs.align}` } : {}),
+          },
+        },
+      },
+      {
+        types: ["table"],
+        attributes: {
+          caption: { default: null, rendered: false },
+          captionRaw: { default: null, rendered: false },
+          captionBefore: { default: false, rendered: false },
+        },
+      },
+    ];
   },
 });
 
@@ -136,6 +313,17 @@ export function tandemExtensions(): AnyExtension[] {
     DeletionMark,
     SubstitutionOldMark,
     SubstitutionNewMark,
+    MmdRefMark,
+    MathBlock,
+    NoteDef,
+    DefinitionList,
+    DefinitionTerm,
+    DefinitionDesc,
+    MmdDirective,
+    MathMark,
+    SubscriptMark,
+    SuperscriptMark,
+    TableAttributes,
     SourcePreservation,
   ];
 }

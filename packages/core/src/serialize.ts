@@ -1,5 +1,5 @@
 import { Document as YamlDocument, isScalar, visit } from "yaml";
-import type { JSONMark, JSONNode, ReviewMap } from "./parse";
+import type { JSONMark, JSONNode, OriginalTable, ReviewMap } from "./parse";
 import { signature } from "./signature";
 
 export interface SerializeContext {
@@ -8,7 +8,7 @@ export interface SerializeContext {
   /** Markdown style of the block being rewritten, so edits keep its conventions. */
   style?: { italic: "*" | "_"; bullet: "-" | "*" | "+"; inTable?: boolean };
   /** Parses a table's original source into per-row keys and lines (supplied by the document layer). */
-  originalRows?: (src: string) => { lines: string[]; rows: string[]; width: number } | null;
+  originalRows?: (src: string) => OriginalTable | null;
   /** Filled while serializing: suggestion ids that still have marked text. Shared, never copied. */
   inlineSuggestionIds: Set<string>;
   /** Filled while serializing: comment ids whose body was written inline. */
@@ -119,6 +119,22 @@ export function serializeBlock(node: JSONNode, ctx: SerializeContext): string {
       return table(node, ctx);
     case "rawBlock":
       return String(node.attrs?.text ?? "");
+    case "mathBlock": {
+      const tex = (node.content ?? []).map((c) => c.text ?? "").join("");
+      const [open, close] = node.attrs?.delim === "\\\\[" ? ["\\\\[", "\\\\]"] : ["$$", "$$"];
+      return node.attrs?.oneLine && !tex.includes("\n") ? `${open} ${tex} ${close}` : `${open}\n${tex}\n${close}`;
+    }
+    case "noteDef": {
+      const label = String(node.attrs?.label ?? "");
+      const prefix = node.attrs?.kind === "glossary" ? `[?${label}]: ` : node.attrs?.kind === "abbr" ? `*[${label}]: ` : `[^${label}]: `;
+      return prefix + inline(node.content, ctx, false);
+    }
+    case "definitionList":
+      return (node.content ?? [])
+        .map((c) => (c.type === "definitionDesc" ? `: ${inline(c.content, ctx, false)}` : inline(c.content, ctx, true)))
+        .join("\n");
+    case "mmdDirective":
+      return String(node.attrs?.raw ?? `{{${node.attrs?.target ?? ""}}}`);
     default:
       return children(node, ctx, "\n\n");
   }
@@ -160,34 +176,56 @@ function listItems(node: JSONNode, ctx: SerializeContext, marker: (i: number, it
 
 function table(node: JSONNode, ctx: SerializeContext): string {
   const cellCtx: SerializeContext = { ...ctx, style: { ...(ctx.style ?? styleOf("")), inTable: true } };
-  const rows = (node.content ?? []).map((row) =>
-    (row.content ?? []).map((cell) =>
-      (cell.content ?? [])
-        .map((p) => inline(p.content, cellCtx, false))
-        .join("<br>")
-        .replace(/\|/g, "\\|")
-        .replace(/\n/g, " "),
-    ),
-  );
-  if (!rows.length) return "";
-  const width = Math.max(...rows.map((r) => r.length));
-  const pad = (r: string[]) => [...r, ...Array(width - r.length).fill("")];
-  const line = (r: string[]) => `| ${pad(r).join(" | ")} |`;
-  const fresh = [line(rows[0]), `| ${Array(width).fill("---").join(" | ")} |`, ...rows.slice(1).map(line)];
+  const rowNodes = node.content ?? [];
+  if (!rowNodes.length) return "";
+  const cellText = (cell: JSONNode) =>
+    (cell.content ?? [])
+      .map((p) => inline(p.content, cellCtx, false))
+      .join("<br>")
+      .replace(/\|/g, "\\|")
+      .replace(/\n/g, " ");
+  // `| a | b |`; a cell spanning n columns ends with n pipes (`| a || b |`).
+  const line = (row: JSONNode) => {
+    const cells = row.content ?? [];
+    return `| ${cells.map((c) => `${cellText(c)} ${"|".repeat(Math.max(1, Number(c.attrs?.colspan ?? 1)))}`).join(" ")}`;
+  };
+  const width = Math.max(1, ...rowNodes.map((r) => (r.content ?? []).reduce((n, c) => n + Number(c.attrs?.colspan ?? 1), 0)));
+  const aligns: Array<string | null> = new Array(width).fill(null);
+  for (const row of rowNodes) {
+    let col = 0;
+    for (const c of row.content ?? []) {
+      if (aligns[col] === null && c.attrs?.align) aligns[col] = String(c.attrs.align);
+      col += Number(c.attrs?.colspan ?? 1);
+    }
+  }
+  const rule = (a: string | null) => (a === "center" ? ":---:" : a === "right" ? "---:" : a === "left" ? ":---" : "---");
+  const separator = `| ${aligns.map(rule).join(" | ")} |`;
+  // Leading rows made only of header cells are the header (MMD allows several).
+  let headerCount = 0;
+  while (headerCount < rowNodes.length && (rowNodes[headerCount].content ?? []).every((c) => c.type === "tableHeader")) headerCount++;
+  headerCount = Math.max(1, headerCount);
 
   // Keep the original text of every row (and the separator) that didn't change.
   const src = typeof node.attrs?.src === "string" ? node.attrs.src.replace(/\n+$/, "") : "";
-  const original = ctx.originalRows?.(src);
-  if (!original || original.lines.length !== original.rows.length + 1) return fresh.join("\n");
-  const out: string[] = [];
-  const rowNodes = node.content ?? [];
-  rowNodes.forEach((row, i) => {
-    const origIndex = i === 0 ? 0 : i + 1;
-    const same = i < original.rows.length && original.rows[i] === rowKey(row);
-    out.push(same ? original.lines[origIndex] : fresh[i === 0 ? 0 : i + 1]);
-    if (i === 0) out.push(original.width === width ? original.lines[1] : fresh[1]);
-  });
+  const original = ctx.originalRows?.(src) ?? null;
+  const rows = rowNodes.map((row, i) => (original && i < original.rows.length && original.rows[i] === rowKey(row) ? original.rowLines[i] : line(row)));
+  const sep = original && original.width === width && sameAligns(original.separator, aligns) ? original.separator : separator;
+
+  const caption = node.attrs?.caption ? String(node.attrs.caption) : null;
+  const captionRaw = node.attrs?.captionRaw ? String(node.attrs.captionRaw) : null;
+  const captionLine = caption === null ? null : captionRaw && captionRaw.includes(`[${caption}]`) ? captionRaw : `[${caption}]`;
+  const out = [...rows.slice(0, headerCount), sep, ...rows.slice(headerCount)];
+  if (captionLine) node.attrs?.captionBefore ? out.unshift(captionLine) : out.push(captionLine);
   return out.join("\n");
+}
+
+function sameAligns(separator: string, aligns: Array<string | null>): boolean {
+  const cells = separator.trim().replace(/^\||\|$/g, "").split("|");
+  return cells.length === aligns.length && cells.every((c, i) => {
+    const t = c.trim();
+    const a = t.startsWith(":") && t.endsWith(":") ? "center" : t.endsWith(":") ? "right" : t.startsWith(":") ? "left" : null;
+    return a === aligns[i];
+  });
 }
 
 /** Content identity of a table row, ignoring preserved-source attributes. */
@@ -212,9 +250,13 @@ const MARK_ORDER = [
   "substitutionOld",
   "substitutionNew",
   "link",
+  "mmdRef",
   "bold",
   "italic",
   "strike",
+  "subscript",
+  "superscript",
+  "math",
   "code",
 ];
 
@@ -258,6 +300,12 @@ export function inline(nodes: JSONNode[] | undefined, ctx: SerializeContext, blo
         return /[A-Za-z0-9]$/.test(out) ? "*" : (ctx.style?.italic ?? "_");
       case "strike":
         return "~~";
+      case "subscript":
+        return "~";
+      case "superscript":
+        return "^";
+      case "math":
+        return m.attrs?.delim === "\\\\(" ? "\\\\(" : "$";
       case "code":
         return "";
       default:
@@ -291,6 +339,8 @@ export function inline(nodes: JSONNode[] | undefined, ctx: SerializeContext, blo
       }
       case "italic":
         return italicDelims.pop() ?? "_";
+      case "math":
+        return m.attrs?.delim === "\\\\(" ? "\\\\)" : "$";
       default:
         return open(m, null);
     }
@@ -328,7 +378,8 @@ export function inline(nodes: JSONNode[] | undefined, ctx: SerializeContext, blo
 
     if (node.type === "text") {
       const isCode = marks.some((m) => m.type === "code");
-      out += isCode ? codeText(node.text ?? "") : escapeText(node.text ?? "", blockStart && out.length === 0);
+      const verbatim = marks.some((m) => m.type === "math" || m.type === "mmdRef");
+      out += isCode ? codeText(node.text ?? "") : verbatim ? (node.text ?? "") : escapeText(node.text ?? "", blockStart && out.length === 0);
     } else if (node.type === "hardBreak") {
       out += ctx.style?.inTable ? "<br>" : "\\\n";
     } else if (node.type === "commentPoint") {
@@ -359,7 +410,12 @@ function escapeText(text: string, atBlockStart: boolean): string {
     .replace(/([*`[\]])/g, "\\$1")
     .replace(/(^|[^A-Za-z0-9])_|_(?=[^A-Za-z0-9]|$)/g, (m) => m.replace("_", "\\_"))
     .replace(/~~/g, "\\~~")
-    .replace(/\{(?=\+\+|--|~~|==|>>)/g, "\\{");
+    .replace(/\{(?=\+\+|--|~~|==|>>)/g, "\\{")
+    // MMD: only escape what would otherwise read as subscript, superscript, math or transclusion.
+    .replace(/(?<![~\\])~(?=[^\s~]+~(?!~))/g, "\\~")
+    .replace(/\^(?=[^\s^]+\^)/g, "\\^")
+    .replace(/\$(?=(?!\s)(?:[^$\n])+?(?<!\s)\$(?!\d))/g, "\\$")
+    .replace(/\{\{(?=[^{}\n]+\}\})/g, "\\{{");
   if (atBlockStart) {
     t = t.replace(/^(#{1,6}\s|>|[-+]\s|\d+[.)]\s)/, "\\$1");
   }

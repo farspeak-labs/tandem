@@ -1,12 +1,16 @@
-import { Lexer, type Token } from "marked";
+import { Lexer, Marked, type Token } from "marked";
 import { parse as parseYaml } from "yaml";
+import { mmdBlockExtensions, splitMmdMetadata } from "./mmd";
+
+/** Block lexer options with the MMD block extensions, so blocks split the way the editor parses them. */
+const blockOptions = new Marked({ gfm: true }).use({ extensions: mmdBlockExtensions }).defaults;
 
 /**
  * A Markdown file split into the pieces Tandem preserves independently.
  * Invariant: frontmatter + lead + blocks.map(b => b.raw).join("") + endmatter === source.
  */
 export interface Segments {
-  /** `---\n…\n---\n` at the very start of the file, verbatim, or "". */
+  /** `---\n…\n---\n` (YAML) or an MMD `Key: value` block at the very start of the file, verbatim, or "". */
   frontmatter: string;
   /** Whitespace between frontmatter and the first block. */
   lead: string;
@@ -27,7 +31,10 @@ const FRONTMATTER = /^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
 
 export function splitFrontmatter(source: string): { frontmatter: string; rest: string } {
   const match = FRONTMATTER.exec(source);
-  if (!match) return { frontmatter: "", rest: source };
+  if (!match) {
+    const { metadata, rest } = splitMmdMetadata(source);
+    return { frontmatter: metadata, rest };
+  }
   try {
     const yaml = match[0].replace(/^---[ \t]*\r?\n/, "").replace(/\r?\n---[ \t]*(?:\r?\n)?$/, "");
     const data = parseYaml(yaml, { logLevel: "silent" });
@@ -89,7 +96,7 @@ function lexBlocks(content: string): SegmentBlock[] {
   if (content === "") return [];
   let tokens: Token[];
   try {
-    tokens = new Lexer({ gfm: true }).blockTokens(content, []);
+    tokens = new Lexer(blockOptions).blockTokens(content, []);
   } catch {
     return [{ raw: content, type: "raw", tokens: [] }];
   }
