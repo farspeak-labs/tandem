@@ -60,7 +60,7 @@ export function ChangesBanner({ editor, api, session, roundTick, onThread }: { e
     scrollToPos(editor.view, next, true);
   };
   const parts = [
-    summary.rewritten && plural(summary.rewritten, "rewritten"),
+    summary.rewritten && plural(summary.rewritten, "rewritten", "rewritten"),
     summary.added && plural(summary.added, "added"),
     summary.removed && plural(summary.removed, "removed", "removed"),
   ].filter(Boolean);

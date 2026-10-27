@@ -3,7 +3,7 @@ import type { Node as PMNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { blockMarkdown, type JSONNode, type ReviewMap } from "@tandem/core";
-import { blockPlainText, compareBlocks, wordChanges } from "@tandem/core/review-diff";
+import { blockPlainText, blockUnits, compareBlocks, heavilyRewritten, wordChanges } from "@tandem/core/review-diff";
 import { segment } from "@tandem/core";
 
 /**
@@ -54,45 +54,40 @@ export function changesSummary(state: EditorState): ChangesSummary {
   return key.getState(state)?.summary ?? EMPTY;
 }
 
-/** Live block text with a map from text offsets back to document positions. */
-function liveText(node: PMNode, nodePos: number): { text: string; spans: Array<{ start: number; end: number; pos: number | null }> } {
-  const parts: string[] = [];
-  const spans: Array<{ start: number; end: number; pos: number | null }> = [];
-  let offset = 0;
-  const pushPart = (fill: (push: (s: string, pos: number | null) => void) => void) => {
-    if (parts.length) {
-      spans.push({ start: offset, end: offset + 1, pos: null });
-      offset += 1;
-    }
-    let part = "";
-    fill((s, pos) => {
-      spans.push({ start: offset, end: offset + s.length, pos });
-      offset += s.length;
-      part += s;
-    });
-    parts.push(part);
-  };
+type Spans = Array<{ start: number; end: number; pos: number | null }>;
+
+/**
+ * A live block's textblocks (paragraphs, cells, list items) in document order,
+ * each with a map from text offsets back to document positions. Same order and
+ * units as `blockUnits` on the reviewed text.
+ */
+function liveUnits(node: PMNode, nodePos: number): Array<{ text: string; spans: Spans; start: number; end: number }> {
+  const units: Array<{ text: string; spans: Spans; start: number; end: number }> = [];
   const visit = (n: PMNode, pos: number) => {
     if (n.type.name === "rawBlock") {
-      pushPart((push) => push(String(n.attrs.text ?? ""), null));
+      const text = String(n.attrs.text ?? "");
+      units.push({ text, spans: [{ start: 0, end: text.length, pos: null }], start: pos, end: pos + n.nodeSize });
       return;
     }
     if (n.isTextblock) {
-      pushPart((push) =>
-        n.forEach((child, off) => {
-          if (child.isText) push(child.text ?? "", pos + 1 + off);
-          else if (child.type.name === "hardBreak") push("\n", null);
-        }),
-      );
+      const spans: Spans = [];
+      let text = "";
+      n.forEach((child, off) => {
+        const s = child.isText ? (child.text ?? "") : child.type.name === "hardBreak" ? "\n" : "";
+        if (!s) return;
+        spans.push({ start: text.length, end: text.length + s.length, pos: child.isText ? pos + 1 + off : null });
+        text += s;
+      });
+      units.push({ text, spans, start: pos + 1, end: pos + n.nodeSize - 1 });
       return;
     }
     n.forEach((child, off) => visit(child, pos + 1 + off));
   };
   visit(node, nodePos);
-  return { text: parts.join("\n"), spans };
+  return units;
 }
 
-function ranges(spans: Array<{ start: number; end: number; pos: number | null }>, from: number, to: number): Array<[number, number]> {
+function ranges(spans: Spans, from: number, to: number): Array<[number, number]> {
   const out: Array<[number, number]> = [];
   for (const s of spans) {
     if (s.pos === null || s.end <= from || s.start >= to) continue;
@@ -103,16 +98,21 @@ function ranges(spans: Array<{ start: number; end: number; pos: number | null }>
   return out;
 }
 
-function posAt(spans: Array<{ start: number; end: number; pos: number | null }>, offset: number, fallback: number): number {
+function posAt(spans: Spans, offset: number, fallback: number): number {
   for (const s of spans) if (s.pos !== null && offset >= s.start && offset <= s.end) return s.pos + (offset - s.start);
   return fallback;
 }
 
-function removedWidget(text: string, label: string, block: boolean) {
+/**
+ * Removed text: short inline removals show struck through; longer ones, removed
+ * blocks and "was" (the old wording of a rewritten passage) collapse behind a chip.
+ */
+function removedWidget(text: string, label: string, kind: "inline" | "block" | "was", heading?: string) {
+  const block = kind === "block";
   return () => {
-    const short = !block && text.length <= INLINE_REMOVAL;
+    const short = kind === "inline" && text.length <= INLINE_REMOVAL;
     const el = document.createElement(block ? "div" : "span");
-    el.className = block ? "chg-removed-block" : short ? "chg-removed" : "chg-removed is-long";
+    el.className = block ? "chg-removed-block" : short ? "chg-removed" : kind === "was" ? "chg-removed is-long is-was" : "chg-removed is-long";
     el.contentEditable = "false";
     el.title = label;
     if (short) {
@@ -124,7 +124,10 @@ function removedWidget(text: string, label: string, block: boolean) {
     head.type = "button";
     head.className = "chg-removed__head";
     const paras = text.split("\n").filter((l) => l.trim()).length;
-    head.textContent = `Removed: “${firstLine.length > 60 ? `${firstLine.slice(0, 60)}…` : firstLine}”${paras > 1 ? ` (${paras} paragraphs)` : ""} ▸`;
+    head.textContent =
+      kind === "was"
+        ? "was ▸"
+        : `${heading ?? "Removed"}: “${firstLine.length > 60 ? `${firstLine.slice(0, 60)}…` : firstLine}”${paras > 1 ? ` (${paras} ${heading ? "cells" : "paragraphs"})` : ""} ▸`;
     const body = document.createElement(block ? "div" : "span");
     body.className = "chg-removed__body";
     body.textContent = text;
@@ -137,6 +140,65 @@ function removedWidget(text: string, label: string, block: boolean) {
     el.append(head, body);
     return el;
   };
+}
+
+/**
+ * Marks inside a rewritten block. Its textblocks (cells, list items, paragraphs)
+ * are matched to the reviewed ones one by one, so changes never bleed across
+ * cells. Light edits are marked word by word; a heavily rewritten passage is
+ * tinted whole with its old wording behind a "was" chip. Cells removed from a
+ * table are listed once, under the table.
+ */
+function rewrittenBlock(node: PMNode, pos: number, beforeRaw: string, label: string): Decoration[] {
+  const decos: Decoration[] = [];
+  const title = { title: label };
+  const before = blockUnits(beforeRaw);
+  const units = liveUnits(node, pos);
+  const inTable = node.type.name === "table";
+  const tableRemovals: string[] = [];
+  const tint = (u: (typeof units)[number], from = 0, to = u.text.length) => {
+    for (const [a, b] of ranges(u.spans, from, to)) decos.push(Decoration.inline(a, b, { class: "chg-added", ...title }));
+  };
+  for (const op of compareBlocks(before, units.map((u) => u.text))) {
+    if (op.kind === "same") continue;
+    if (op.kind === "added") {
+      tint(units[op.after]);
+    } else if (op.kind === "removed") {
+      const text = before[op.before];
+      if (!text.trim()) continue;
+      if (inTable) tableRemovals.push(text);
+      else {
+        const at = op.at < units.length ? units[op.at].start : (units.at(-1)?.end ?? pos + 1);
+        decos.push(Decoration.widget(at, removedWidget(text, label, "inline"), { side: -1, key: `rmu:${at}:${text}`, ignoreSelection: true }));
+      }
+    } else {
+      const u = units[op.after];
+      const words = wordChanges(before[op.before], u.text);
+      if (heavilyRewritten(words)) {
+        tint(u);
+        decos.push(Decoration.widget(u.start, removedWidget(before[op.before], label, "was"), { side: -1, key: `was:${u.start}:${before[op.before]}`, ignoreSelection: true }));
+        continue;
+      }
+      let offset = 0;
+      for (const w of words) {
+        if (w.op === "added") {
+          tint(u, offset, offset + w.text.length);
+          offset += w.text.length;
+        } else if (w.op === "removed") {
+          if (!w.text.trim()) continue;
+          const at = posAt(u.spans, offset, u.start);
+          decos.push(Decoration.widget(at, removedWidget(w.text, label, "inline"), { side: -1, key: `rmw:${at}:${w.text}`, ignoreSelection: true }));
+        } else {
+          offset += w.text.length;
+        }
+      }
+    }
+  }
+  if (tableRemovals.length) {
+    const text = tableRemovals.join("\n");
+    decos.push(Decoration.widget(pos + node.nodeSize, removedWidget(text, label, "block", "Removed from this table"), { side: -1, key: `rmt:${pos}:${text}`, ignoreSelection: true }));
+  }
+  return decos;
 }
 
 function compute(doc: PMNode, baseline: { raws: string[]; label: string }, ctx: () => { comments: ReviewMap; suggestions: ReviewMap }): { decos: DecorationSet; summary: ChangesSummary } {
@@ -171,31 +233,16 @@ function compute(doc: PMNode, baseline: { raws: string[]; label: string }, ctx: 
       }
     } else {
       const { node, pos } = nodes[ch.after];
-      const before = blockPlainText(baseline.raws[ch.before]);
-      const now = liveText(node, pos);
       decos.push(Decoration.node(pos, pos + node.nodeSize, { class: "chg-block chg-block--rewritten", ...title }));
       targets.push(pos);
       summary.rewritten++;
-      let offset = 0;
-      for (const w of wordChanges(before, now.text)) {
-        if (w.op === "added") {
-          for (const [from, to] of ranges(now.spans, offset, offset + w.text.length)) decos.push(Decoration.inline(from, to, { class: "chg-added", ...title }));
-          offset += w.text.length;
-        } else if (w.op === "removed") {
-          if (w.text.trim()) {
-            const at = posAt(now.spans, offset, pos + 1);
-            decos.push(Decoration.widget(at, removedWidget(w.text, baseline.label, false), { side: -1, key: `rmw:${at}:${w.text}`, ignoreSelection: true }));
-          }
-        } else {
-          offset += w.text.length;
-        }
-      }
+      decos.push(...rewrittenBlock(node, pos, baseline.raws[ch.before], baseline.label));
     }
   }
   for (const r of removals) {
     if (!r.text.trim()) continue;
     const at = r.at < nodes.length ? nodes[r.at].pos : doc.content.size;
-    decos.push(Decoration.widget(at, removedWidget(r.text, baseline.label, true), { side: -1, key: `rm:${at}:${r.text}`, ignoreSelection: true }));
+    decos.push(Decoration.widget(at, removedWidget(r.text, baseline.label, "block"), { side: -1, key: `rm:${at}:${r.text}`, ignoreSelection: true }));
     targets.push(at);
     summary.removed++;
   }

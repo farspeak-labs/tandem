@@ -26,6 +26,10 @@ describe("compareBlocks", () => {
     ]);
   });
 
+  it("a table with the same header row is one table edited, however much changed", () => {
+    expect(compareBlocks(["| row | gap |\n| --- | --- |\n| a | b |\n"], ["| row | gap |\n| --- | --- |\n| x | y |\n| z | w |\n"])).toEqual([{ kind: "rewritten", before: 0, after: 0 }]);
+  });
+
   it("ignores trailing blank lines", () => {
     expect(compareBlocks(["A.\n\n\n"], ["A.\n"])).toEqual([{ kind: "same", before: 0, after: 0 }]);
   });
@@ -44,5 +48,18 @@ describe("wordChanges / blockPlainText", () => {
   it("gives a block's visible text, one line per textblock", () => {
     expect(blockPlainText("- **one**\n- two [link](x)\n")).toBe("one\ntwo link");
     expect(blockPlainText("| a | b |\n| --- | --- |\n| 1 | 2 |\n")).toBe("a\nb\n1\n2");
+  });
+});
+
+describe("units and heavy rewrites", async () => {
+  const { blockUnits, heavilyRewritten } = await import("../src/review-diff");
+  it("splits a table into its cells and a list into its items", () => {
+    expect(blockUnits("| a | b |\n| --- | --- |\n| one two | three |\n")).toEqual(["a", "b", "one two", "three"]);
+    expect(blockUnits("- first\n- second\n")).toEqual(["first", "second"]);
+  });
+  it("tells a light edit from a rewrite", () => {
+    expect(heavilyRewritten(wordChanges("Build the probe today.", "Build the probe tomorrow."))).toBe(false);
+    expect(heavilyRewritten(wordChanges("no dollar value: orders hold cases", "a wholesale price per case on each wine"))).toBe(true);
+    expect(heavilyRewritten(wordChanges("last month's line 31", "last month's line 31. The first month starts from the sheet's March 2026 end."))).toBe(false);
   });
 });

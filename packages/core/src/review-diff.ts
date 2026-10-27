@@ -31,7 +31,7 @@ export function compareBlocks(before: string[], after: string[]): BlockChange[] 
     // Pair removals with additions in order when they share enough words (a rewrite).
     let ai = 0;
     for (const r of removed) {
-      const k = added.findIndex((x, idx) => idx >= ai && similarity(a[r], b[x]) >= REWRITE_SIMILARITY);
+      const k = added.findIndex((x, idx) => idx >= ai && (similarity(a[r], b[x]) >= REWRITE_SIMILARITY || sameFirstLine(a[r], b[x])));
       if (k >= 0) {
         for (; ai < k; ai++) out.push({ kind: "added", after: added[ai] });
         out.push({ kind: "rewritten", before: r, after: added[k] });
@@ -60,6 +60,12 @@ export function compareBlocks(before: string[], after: string[]): BlockChange[] 
   }
   flush(m);
   return out;
+}
+
+/** Blocks starting with the same line (a table's header row, a list's first item, a heading's text) are one block edited. */
+function sameFirstLine(x: string, y: string): boolean {
+  const first = (s: string) => s.split("\n")[0].trim();
+  return first(x).length > 0 && first(x) === first(y) && /^\|/.test(first(x));
 }
 
 function words(s: string): Set<string> {
@@ -96,6 +102,15 @@ export function blockPlainText(raw: string): string {
 }
 
 export function nodePlainText(node: JSONNode): string {
+  return nodeUnits(node).join("\n");
+}
+
+/** A block's textblocks (paragraphs, headings, table cells, list items) as separate texts. */
+export function blockUnits(raw: string): string[] {
+  return nodeUnits(convertBlock(raw.endsWith("\n") ? raw : `${raw}\n`, newConverter("")));
+}
+
+export function nodeUnits(node: JSONNode): string[] {
   const parts: string[] = [];
   const walk = (n: JSONNode) => {
     if (n.type === "rawBlock") {
@@ -114,5 +129,17 @@ export function nodePlainText(node: JSONNode): string {
     kids.forEach(walk);
   };
   walk(node);
-  return parts.join("\n");
+  return parts;
+}
+
+/**
+ * True when so much of a text was replaced that word-by-word marks would be
+ * noise: more than half of the old text is gone. (Text that was only added to
+ * reads fine word by word.)
+ */
+export function heavilyRewritten(changes: WordChange[]): boolean {
+  const len = (op: WordChange["op"]) => changes.filter((c) => c.op === op).reduce((n, c) => n + c.text.replace(/\s+/g, "").length, 0);
+  const same = len("same");
+  const removed = len("removed");
+  return removed > (same + removed) * 0.5 && len("added") > 0;
 }

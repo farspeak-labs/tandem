@@ -3075,6 +3075,7 @@ button {
   border-radius: 2px;
 }
 .tandem-prose .chg-removed {
+  margin-right: 0.18em;
   color: var(--del-text);
   background: color-mix(in srgb, var(--del-line) 14%, transparent);
   text-decoration: line-through;
@@ -3111,6 +3112,17 @@ button {
 }
 .tandem-prose .chg-removed.is-long {
   display: inline;
+  text-decoration: none;
+  background: none;
+}
+.tandem-prose .chg-removed.is-was .chg-removed__head {
+  margin-right: 0.35em;
+  padding: 0 6px;
+  font-size: 11px;
+  vertical-align: 1px;
+}
+.tandem-prose .chg-removed.is-was .chg-removed__body {
+  margin: 4px 0 6px;
 }
 .tandem-prose .chg-removed__head {
   padding: 2px 8px;
