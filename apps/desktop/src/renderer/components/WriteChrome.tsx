@@ -111,7 +111,7 @@ export function WriteChrome({ editor, scroller, onExit }: { editor: Editor; scro
         >
           ⤢
         </button>
-        <button type="button" className="write-chrome__done" title="Leave Write mode (⌘⇧W)" onClick={onExit}>
+        <button type="button" className="write-chrome__done" title="Leave Write mode (Esc or ⌘⇧W)" onClick={onExit}>
           Done
         </button>
       </div>

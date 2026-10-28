@@ -221,11 +221,14 @@ export function Workspace({ session, api, initialMode = "suggest", note = false 
         cancelDraftComment(editor);
       } else if (e.key === "Escape" && find.open && richActive) {
         setFind((f) => ({ ...f, open: false }));
+      } else if (e.key === "Escape" && writeRef.current && !e.defaultPrevented && !document.querySelector(".popover, .menu-pop, .write-settings")) {
+        e.preventDefault();
+        toggleWrite();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [status, newComment, editor, view, openFind, toggleOutline, stepReview, richActive, find.open]);
+  }, [status, newComment, editor, view, openFind, toggleOutline, stepReview, richActive, find.open, toggleWrite]);
 
   // Hook for native menu items (main process): dispatchEvent(new CustomEvent("tandem:command", { detail })).
   useEffect(() => {

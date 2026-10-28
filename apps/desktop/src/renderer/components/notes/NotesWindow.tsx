@@ -135,7 +135,8 @@ export function NotesWindow({ conn }: { conn: ServiceConnection }) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "l") {
         e.preventDefault();
         focusSearch();
-      } else if (e.key === "Escape" && (e.target as HTMLElement | null)?.closest?.(".notes-editor .ProseMirror") && !document.querySelector(".popover, .menu-pop")) {
+      } else if (e.key === "Escape" && (e.target as HTMLElement | null)?.closest?.(".notes-editor .ProseMirror") && !document.querySelector(".popover, .menu-pop, .app.is-write")) {
+        // (In Write mode, Esc leaves Write mode instead.)
         focusSearch();
       }
     };
