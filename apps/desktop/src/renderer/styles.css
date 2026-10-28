@@ -3524,6 +3524,16 @@ button {
   grid-template-columns: minmax(240px, 320px) 1fr;
   min-height: 0;
 }
+/* Write mode in a note: the editor takes the whole window (no search bar, list or status line). */
+.notes:has(.notes-editor .app.is-write) .notes__body {
+  grid-template-columns: 1fr;
+}
+.notes:has(.notes-editor .app.is-write) :is(.notes__bar, .notes__list, .notes__status) {
+  display: none;
+}
+.notes:has(.notes-editor .app.is-write) {
+  grid-template-rows: 1fr;
+}
 .notes__list {
   overflow: auto;
   border-right: 1px solid var(--border);
