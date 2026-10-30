@@ -39,7 +39,8 @@ let quitting = false;
 if (process.env.TANDEM_USER_DATA) app.setPath("userData", process.env.TANDEM_USER_DATA);
 
 if (!app.requestSingleInstanceLock()) {
-  app.quit();
+  // Another Tandem is running (or still quitting): leave at once, before any start-up work.
+  app.exit(0);
 }
 
 /** Markdown paths passed on the command line (Windows/Linux file associations and "Open with"). */

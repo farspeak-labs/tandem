@@ -221,9 +221,12 @@ async function openAndWait(deps: Deps, command: string, path: string, flags: Map
         timeoutSeconds: Math.min(WAIT_CHUNK_SECONDS, remaining || WAIT_CHUNK_SECONDS),
       }, (WAIT_CHUNK_SECONDS + 15) * 1000);
     } catch (err) {
-      // Tandem restarted or the doc was closed: reconnect, reopen quietly, keep the cursor.
+      // Tandem quit or restarted, or the doc was closed: wait for Tandem to be running again
+      // (never relaunch it: the person may have just quit it), reopen quietly, keep the cursor.
       await deps.sleep(1500);
-      server = await ensureServer(deps);
+      const back = await waitForServer(deps, deadline);
+      if (!back) continue;
+      server = back;
       await call(deps, server, "/api/open", { path, show: false }).catch(() => undefined);
       continue;
     }
@@ -433,6 +436,15 @@ async function ensureServer(deps: Deps): Promise<ServerInfo> {
     if (info) return info;
   }
   throw new Error("Tandem did not start. Try opening Tandem.app, then run the command again.");
+}
+
+/** Waits (without launching anything) until Tandem is running again, or the deadline passes. */
+async function waitForServer(deps: Deps, deadline: number): Promise<ServerInfo | null> {
+  for (;;) {
+    const info = await findServer(deps);
+    if (info || Date.now() >= deadline) return info;
+    await deps.sleep(2000);
+  }
 }
 
 /**

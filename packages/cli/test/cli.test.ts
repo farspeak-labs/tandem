@@ -82,6 +82,22 @@ describe("tandem CLI", () => {
     expect(await run).toBe(EXIT.changes);
   });
 
+  it("a waiting review outlives Tandem quitting and never relaunches it", async () => {
+    const { file, deps, svc: first } = await setup();
+    const launches: number[] = [];
+    const run = runCli(["open", file, "--json"], { ...deps, launch: () => void launches.push(Date.now()) });
+    await new Promise((r) => setTimeout(r, 300));
+    await first.close();
+    await new Promise((r) => setTimeout(r, 2500));
+    expect(launches).toEqual([]);
+    // The person opens Tandem again later: the wait picks the review up there.
+    svc = await startService({ home: deps.home, port: 0, inboxDir: join(deps.home, "inbox") });
+    await new Promise((r) => setTimeout(r, 2500));
+    await reviewPath(svc, file, "approve");
+    expect(await run).toBe(EXIT.approved);
+    expect(launches).toEqual([]);
+  }, 20000);
+
   it("--timeout exits 3", async () => {
     const { file, deps } = await setup();
     expect(await runCli(["open", file, "--timeout", "1"], deps)).toBe(EXIT.timeout);
