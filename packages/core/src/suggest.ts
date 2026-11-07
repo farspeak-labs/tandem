@@ -153,9 +153,19 @@ function changeBlock(before: string, after: string, id: () => string): string | 
   return roundTrips(result, after, before, "~~") ? result : null;
 }
 
-/** `{~~old~>new~~}` per changed word run, `{++…++}` / `{--…--}` for pure insertions/deletions. */
+/**
+ * `{~~old~>new~~}` per changed word run, `{++…++}` / `{--…--}` for pure insertions/deletions.
+ * A line that was rewritten rather than edited becomes one `{~~old~>new~~}`, so the
+ * reviewer reads the new text whole instead of dozens of one-word substitutions.
+ */
 function wordMarkup(oldText: string, newText: string, id: () => string): string {
   const parts = diffWordsWithSpace(oldText, newText);
+  if (oldText.trim() && newText.trim() && rewritten(parts)) {
+    const lead = /^\s*/.exec(oldText)![0];
+    const trail = /\s*$/.exec(oldText)![0];
+    if (lead === /^\s*/.exec(newText)![0] && trail === /\s*$/.exec(newText)![0])
+      return `${lead}{~~${oldText.trim()}~>${newText.trim()}~~}{#${id()}}${trail}`;
+  }
   let out = "";
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i];
@@ -171,6 +181,27 @@ function wordMarkup(oldText: string, newText: string, id: () => string): string 
     }
   }
   return out;
+}
+
+/**
+ * True when word-by-word marks would be noise: more than half the old text is gone,
+ * or the changes are scattered (five or more) and under 60% of the old text
+ * survives in runs of three or more words.
+ */
+function rewritten(parts: ReturnType<typeof diffWordsWithSpace>): boolean {
+  const chars = (t: string) => t.replace(/\s+/g, "").length;
+  let old = 0;
+  let removed = 0;
+  let kept = 0;
+  let runs = 0;
+  for (const p of parts) {
+    if (p.added) continue;
+    old += chars(p.value);
+    if (p.removed) removed += chars(p.value);
+    else if ((p.value.match(/[\p{L}\p{N}]+/gu)?.length ?? 0) >= 3) kept += chars(p.value);
+  }
+  for (let i = 0; i < parts.length; i++) if ((parts[i].added || parts[i].removed) && !(parts[i].removed && parts[i + 1]?.added)) runs++;
+  return removed > old * 0.5 || (runs >= 5 && kept < old * 0.6);
 }
 
 /**

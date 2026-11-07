@@ -24,6 +24,24 @@ describe("suggestChanges", () => {
     expect(r.suggestions.s4.group).toBe("s2");
   });
 
+  it("replaces a rewritten paragraph whole instead of word by word", () => {
+    const old =
+      "**Ohio reads every stop from its own Postgres.** A stop set at home reaches Ohio through replication. That is normally under a second, and the same path Dublin already uses. If Ohio has heard nothing from home for **10 minutes**, it treats the stops as unreadable and opens nothing new. Resting bids are kept, as now.";
+    const neu =
+      "The three Crash Bid services (`crashbid-live`, `crashbid-polyus-live`, `crashbid-polyus-stream`) run entirely on Ohio's Postgres: stops, halts, ledgers, misses, game state and status. Home gets everything back through replication, so the pages and analysis tools keep working unchanged.";
+    const r = suggestChanges(`# Plan\n\n${old}\n`, `# Plan\n\n${neu}\n`, opts());
+    expect(r.body).toBe(`# Plan\n\n{~~${old}~>${neu}~~}{#s1}\n`);
+  });
+
+  it("replaces a list item whole when its edits are scattered", () => {
+    const r = suggestChanges(
+      "- A heartbeat from home writes the time every 5 s and it replicates like any setting.\n",
+      "- The heartbeat from Ohio stores a time every 10 s so it reads like a fresh value.\n",
+      opts(),
+    );
+    expect(r.body).toBe("- {~~A heartbeat from home writes the time every 5 s and it replicates like any setting.~>The heartbeat from Ohio stores a time every 10 s so it reads like a fresh value.~~}{#s1}\n");
+  });
+
   it("marks list items line by line", () => {
     const cur = "- one\n- two\n";
     const prop = "- one\n- two, revised\n- three\n";
