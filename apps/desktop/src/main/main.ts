@@ -197,6 +197,8 @@ interface Prefs {
   spellcheck: boolean;
   /** Name shown on your comments, suggestions and reviews. Defaults to the Mac user's full name. */
   userName?: string;
+  /** Set once Tandem has offered to become the default app for Markdown files. */
+  offeredDefault?: boolean;
 }
 function prefsFile() {
   return join(app.getPath("userData"), "prefs.json");
@@ -232,6 +234,7 @@ app.whenReady().then(async () => {
     if (e.type === "agent.waiting") onAgentWaiting(e.docId, e.count);
     if (e.type === "doc.saved") windows.get(e.docId)?.setDocumentEdited(false);
   });
+  defaultMarkdownApp = await isDefaultMarkdownApp().catch(() => false);
   buildMenu();
   if (!isMac) createTray();
   for (const p of pendingOpen.splice(0)) openPath(p);
@@ -239,8 +242,65 @@ app.whenReady().then(async () => {
   setTimeout(() => {
     if (process.env.TANDEM_OPEN_NOTES === "1") showNotes();
     else if (windows.size === 0 && !libraryWindow && !notesWindow && process.env.TANDEM_BENCH !== "1") showLibrary();
+    if (process.env.TANDEM_BENCH !== "1") void offerDefaultMarkdownApp();
   }, 1500);
 });
+
+/**
+ * Default app for Markdown files (.md, .markdown, .mmd, .multimarkdown). On macOS
+ * Launch Services records the choice per content type; Windows only lets the
+ * person choose in Settings, so there we open Default apps.
+ */
+const DEFAULT_TYPES_SCRIPT = `function run(argv) {
+  ObjC.import("CoreServices");
+  const types = ["net.daringfireball.markdown"];
+  for (const ext of ["md", "markdown", "mmd", "multimarkdown"]) {
+    const t = ObjC.castRefToObject($.UTTypeCreatePreferredIdentifierForTag($.kUTTagClassFilenameExtension, $(ext), null));
+    if (t && !types.includes(ObjC.unwrap(t))) types.push(ObjC.unwrap(t));
+  }
+  // Launch Services takes a moment to report a new default, so "set" answers from the calls' status.
+  // Extensions with no declared type (dyn.*) can't be assigned (-50); Tandem's own claim on them stands.
+  if (argv[0] === "set") return types.filter((t) => !t.startsWith("dyn.")).map((t) => $.LSSetDefaultRoleHandlerForContentType($(t), $.kLSRolesAll, $(argv[1]))).every((r) => r === 0);
+  return types.every((t) => {
+    const h = $.LSCopyDefaultRoleHandlerForContentType($(t), $.kLSRolesAll);
+    return !!h && ObjC.unwrap(ObjC.castRefToObject(h)).toLowerCase() === argv[1].toLowerCase();
+  });
+}`;
+const BUNDLE_ID = "com.farspeaklabs.tandem";
+async function isDefaultMarkdownApp(): Promise<boolean> {
+  if (process.platform !== "darwin") return false;
+  const { stdout } = await execFileAsync("/usr/bin/osascript", ["-l", "JavaScript", "-e", DEFAULT_TYPES_SCRIPT, "check", BUNDLE_ID]);
+  return stdout.trim() === "true";
+}
+async function makeDefaultMarkdownApp(): Promise<boolean> {
+  if (process.platform === "win32") {
+    void shell.openExternal("ms-settings:defaultapps");
+    return false;
+  }
+  if (process.platform !== "darwin") return false;
+  const { stdout } = await execFileAsync("/usr/bin/osascript", ["-l", "JavaScript", "-e", DEFAULT_TYPES_SCRIPT, "set", BUNDLE_ID]);
+  const ok = stdout.trim() === "true";
+  log(`default for Markdown: ${ok ? "set" : "not set"}`);
+  defaultMarkdownApp = ok;
+  buildMenu();
+  return ok;
+}
+let defaultMarkdownApp = false;
+/** Asks once (installed app only) whether Tandem should open Markdown files by default. */
+async function offerDefaultMarkdownApp() {
+  if (!app.isPackaged || prefs.offeredDefault || process.platform !== "darwin") return;
+  if (await isDefaultMarkdownApp().catch(() => true)) return;
+  prefs.offeredDefault = true;
+  savePrefs();
+  const { response } = await dialog.showMessageBox({
+    message: "Open Markdown files in Tandem?",
+    detail: "Double-clicking a .md file in Finder will open it in Tandem. You can change this later from the Tandem menu.",
+    buttons: ["Use Tandem", "Not Now"],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (response === 0) await makeDefaultMarkdownApp().catch(() => false);
+}
 
 /** The reviewer name: Your Name… setting, else the macOS account's full name, else the login name. */
 function userName(): string {
@@ -525,6 +585,9 @@ function buildMenu() {
         { role: "about" },
         { type: "separator" },
         { label: "Your Name…", click: () => void askUserName() },
+        defaultMarkdownApp
+          ? { label: "Tandem Opens Markdown Files", enabled: false }
+          : { label: "Open Markdown Files in Tandem", click: () => void makeDefaultMarkdownApp() },
         { type: "separator" },
         { role: "services" },
         { type: "separator" },
@@ -558,6 +621,7 @@ function buildMenu() {
           ? [{ role: "close" } as MenuItemConstructorOptions]
           : ([
               { label: "Your Name…", click: () => void askUserName() },
+              { label: "Open Markdown Files in Tandem…", click: () => void makeDefaultMarkdownApp() },
               { type: "separator" },
               { role: "close" },
               { label: "Quit Tandem", accelerator: "Ctrl+Q", click: () => app.quit() },

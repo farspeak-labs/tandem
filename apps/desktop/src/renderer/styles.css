@@ -866,11 +866,19 @@ button {
   overflow-x: auto;
   border-radius: 16px;
 }
+/* Columns get at least 9em each instead of an even split of the text width, so a
+   many-column table keeps readable columns and scrolls sideways. The table element
+   is the scroller; its body lays out as the table (filling the width when it fits). */
 .tandem-prose table {
-  width: 100%;
-  table-layout: fixed;
-  border-collapse: collapse;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
   margin: 16px 0;
+}
+.tandem-prose table > tbody {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
 }
 .tandem-prose .tableWrapper table {
   margin: 0;
@@ -878,7 +886,8 @@ button {
 .tandem-prose th,
 .tandem-prose td {
   position: relative;
-  min-width: 1em;
+  min-width: 9em;
+  overflow-wrap: normal;
   padding: 8px 12px;
   border: 1px solid var(--doc-border);
   text-align: left;
