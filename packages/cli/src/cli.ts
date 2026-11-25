@@ -80,16 +80,21 @@ interface Parsed {
   flags: Map<string, string | true>;
 }
 
+/** Flags that take the next word as their value (`--note "what changed"`); one list for both parsers. */
+const VALUED_FLAGS = new Set(["tags", "type", "folder", "note", "timeout", "since", "from", "to", "section", "file", "on", "out"]);
+
 function parse(args: string[]): Parsed {
   const flags = new Map<string, string | true>();
   const positionals: string[] = [];
-  const valued = new Set(["tags", "type", "folder", "timeout", "since", "from", "to", "section", "file", "on", "out"]);
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a.startsWith("--")) {
-      const [key, inline] = a.slice(2).split("=", 2);
+      // Split on the first "=" only, so `--note=a=b` keeps "a=b".
+      const eq = a.indexOf("=");
+      const key = eq < 0 ? a.slice(2) : a.slice(2, eq);
+      const inline = eq < 0 ? undefined : a.slice(eq + 1);
       if (inline !== undefined) flags.set(key, inline);
-      else if (valued.has(key) && i + 1 < args.length) flags.set(key, args[++i]);
+      else if (VALUED_FLAGS.has(key) && i + 1 < args.length) flags.set(key, args[++i]);
       else flags.set(key, true);
     } else {
       positionals.push(a);
@@ -269,11 +274,11 @@ async function readStdin(): Promise<string> {
 
 /** Positional words after `<command> <file>`, without flags and their values. */
 function positionalsAfter(rest: string[]): string[] {
-  const valued = new Set(["--section", "--file", "--on", "--tags", "--type", "--folder", "--note", "--timeout", "--since", "--from", "--to"]);
   const out: string[] = [];
   for (let i = 0; i < rest.length; i++) {
-    if (valued.has(rest[i])) i++;
-    else if (!rest[i].startsWith("--")) out.push(rest[i]);
+    if (rest[i].startsWith("--")) {
+      if (VALUED_FLAGS.has(rest[i].slice(2))) i++;
+    } else out.push(rest[i]);
   }
   return out;
 }

@@ -161,6 +161,21 @@ describe("tandem CLI", () => {
     expect(out.filter((l) => /plan\.md: (Approved|Changes requested)/.test(l))).toHaveLength(2);
   });
 
+  it("open --note takes the next word as the note, not as another file", async () => {
+    const { file, out, deps } = await setup();
+    expect(await runCli(["open", file, "--note", "Tightened the table", "--no-wait", "--json"], deps)).toBe(0);
+    expect(out.filter((l) => l.startsWith("ERR"))).toEqual([]);
+    expect(await runCli(["history", file, "--json"], deps)).toBe(0);
+    expect(JSON.parse(out.at(-1)!).at(-1)).toMatchObject({ kind: "agent", note: "Tightened the table" });
+  });
+
+  it("an inline value keeps everything after the first =", async () => {
+    const { file, out, deps } = await setup();
+    expect(await runCli(["open", file, "--note=a=b", "--no-wait", "--json"], deps)).toBe(0);
+    expect(await runCli(["history", file, "--json"], deps)).toBe(0);
+    expect(JSON.parse(out.at(-1)!).at(-1)).toMatchObject({ kind: "agent", note: "a=b" });
+  });
+
   it("rejects non-Markdown files", async () => {
     const { deps } = await setup();
     expect(await runCli(["open", "notes.txt"], deps)).toBe(EXIT.usage);
